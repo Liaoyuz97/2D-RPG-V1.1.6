@@ -1,0 +1,2755 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D 平台 RPG 遊戲 - 完整擴展版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.min.js"></script>
+    <style>
+        body {
+            background-color: #1a202c;
+            color: #e2e8f0;
+            font-family: 'Inter', sans-serif, 'Microsoft JhengHei', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        canvas {
+            background-image: url('https://placehold.co/800x450/2d3748/1a202c?text=背景');
+            background-size: cover;
+            border-radius: 0.5rem;
+            border: 2px solid #4a5568;
+            /* Make canvas responsive */
+            width: 100%;
+            height: auto; /* Maintain aspect ratio */
+        }
+        .game-ui, #game-container {
+            padding: 1rem;
+            background-color: #2d3748;
+            border-radius: 0.5rem;
+            margin-top: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            /* Make game container responsive */
+            width: 100%;
+            max-width: 800px; /* Max width for desktop */
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .stat-bar-container {
+            width: 100%;
+            height: 20px;
+            background-color: #4a5568;
+            border-radius: 0.25rem;
+            overflow: hidden;
+            border: 1px solid #6b7280;
+        }
+        .stat-bar-fill {
+            height: 100%;
+            transition: width 0.3s ease-out;
+            border-radius: 0.25rem;
+        }
+        .health-bar { background-color: #ef4444; }
+        .mana-bar { background-color: #3b82f6; }
+        .xp-bar { background-color: #8b5cf6; } /* Purple for XP */
+
+        .hotkey-section {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-top: 1rem;
+        }
+        .hotkey-row {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center; /* Center hotkeys */
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+        }
+        .hotkey-slot {
+            width: 45px; /* Smaller size */
+            height: 45px; /* Smaller size */
+            border: 2px solid #6b7280;
+            border-radius: 0.375rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem; /* Smaller font for emoji */
+            position: relative;
+            background-color: #4a5568;
+        }
+        .hotkey-slot .key {
+            position: absolute;
+            top: 2px;
+            left: 4px;
+            font-size: 0.6rem; /* Smaller font for key number */
+            color: #a0aec0;
+        }
+        .hotkey-slot .quantity {
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            font-size: 0.75rem; /* Smaller font for quantity */
+            font-weight: bold;
+        }
+        .damage-text {
+            position: absolute;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #fcd34d; /* Amber color */
+            opacity: 1;
+            transition: all 1s ease-out;
+            pointer-events: none;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
+        }
+        .game-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 3rem;
+            font-weight: bold;
+            color: white;
+            text-shadow: 3px 3px 5px rgba(0,0,0,0.8);
+            display: none; /* 初始隱藏 */
+            z-index: 100;
+        }
+
+        /* Modal Styles */
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 99;
+            display: none; /* Hidden by default */
+        }
+        .modal-content {
+            background-color: #2d3748;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+            width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            position: relative;
+        }
+        .modal-close-btn {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            color: #e2e8f0;
+            cursor: pointer;
+        }
+        .modal-item-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .modal-item-card {
+            background-color: #4a5568;
+            padding: 0.75rem;
+            border-radius: 0.375rem;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .modal-item-card:hover {
+            transform: translateY(-3px);
+        }
+        .modal-item-card button {
+            background-color: #4299e1;
+            color: white;
+            padding: 0.3rem 0.6rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+            border: none;
+        }
+        .modal-item-card button:hover {
+            background-color: #3182ce;
+        }
+
+        /* Start Screen Styles */
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #1a202c;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 101; /* Above everything else */
+        }
+        #start-screen h1 {
+            font-size: 4rem;
+            color: #4299e1;
+            margin-bottom: 2rem;
+        }
+        #start-screen button {
+            padding: 1rem 2rem;
+            font-size: 1.5rem;
+            background-color: #48bb78;
+            color: white;
+            border-radius: 0.5rem;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-bottom: 1rem; /* Space between buttons */
+        }
+        #start-screen button:hover {
+            background-color: #38a169;
+        }
+
+        /* Level Select Modal Styles */
+        #level-select-modal .modal-content {
+            width: 700px; /* Wider for level list */
+        }
+        #level-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 1rem;
+        }
+        #level-list button {
+            background-color: #6366f1; /* Indigo */
+            color: white;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            border: none;
+        }
+        #level-list button:hover {
+            background-color: #4f46e5;
+        }
+
+        /* Mobile Controls */
+        #mobile-controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            display: flex;
+            flex-direction: column; /* Stack control groups vertically */
+            gap: 0.5rem; /* Space between rows */
+            padding: 0.75rem; /* Slightly less padding */
+            background-color: rgba(45, 55, 72, 0.8); /* Semi-transparent dark background */
+            z-index: 90; /* Below modals, above game */
+            border-top-left-radius: 0.5rem;
+            border-top-right-radius: 0.5rem;
+            box-shadow: 0 -4px 6px rgba(0, 0, 0, 0.1);
+            /* Show on small screens, hide on medium and up */
+            display: flex; /* Default to flex for mobile */
+        }
+        @media (min-width: 768px) { /* Tailwind's 'md' breakpoint */
+            #mobile-controls {
+                display: none; /* Hide on desktop */
+            }
+        }
+
+        .mobile-control-group {
+            display: flex;
+            gap: 0.5rem; /* Smaller gap between buttons */
+            align-items: center;
+            width: 100%; /* Ensure groups take full width */
+            justify-content: space-between; /* Distribute items within the group */
+        }
+        .mobile-button {
+            width: 50px; /* Smaller size */
+            height: 50px; /* Smaller size */
+            border-radius: 50%; /* Circular buttons */
+            background-color: #4299e1; /* Blue */
+            color: white;
+            font-size: 1.2rem; /* Slightly smaller font */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: background-color 0.2s, transform 0.1s;
+            user-select: none; /* Prevent text selection on touch */
+            -webkit-tap-highlight-color: transparent; /* Remove tap highlight */
+            flex-shrink: 0; /* Prevent shrinking */
+        }
+        .mobile-button:active {
+            background-color: #3182ce;
+            transform: scale(0.95);
+        }
+        .mobile-button.action-button {
+            background-color: #e53e3e; /* Red for attack */
+        }
+        .mobile-button.action-button:active {
+            background-color: #c53030;
+        }
+        .mobile-button.skill-button {
+            background-color: #9f7aea; /* Purple for skills */
+        }
+        .mobile-button.skill-button:active {
+            background-color: #805ad5;
+        }
+        .mobile-button.item-button {
+            background-color: #ed8936; /* Orange for items */
+        }
+        .mobile-button.item-button:active {
+            background-color: #dd6b20;
+        }
+        /* Specific styles for hotkey buttons to make them even smaller */
+        .mobile-button.hotkey-mobile-button {
+            width: 40px;
+            height: 40px;
+            font-size: 1rem;
+        }
+
+        /* Quest Modal Styles */
+        #quest-modal .modal-content {
+            width: 650px;
+        }
+        .quest-card {
+            background-color: #4a5568;
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .quest-card .quest-progress-bar {
+            width: 100%;
+            height: 10px;
+            background-color: #6b7280;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .quest-card .quest-progress-fill {
+            height: 100%;
+            background-color: #48bb78; /* Green */
+            border-radius: 5px;
+            transition: width 0.3s ease-out;
+        }
+        .quest-card button {
+            background-color: #4299e1;
+            color: white;
+            padding: 0.3rem 0.6rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            font-size: 0.875rem;
+            cursor: pointer;
+            border: none;
+        }
+        .quest-card button:hover {
+            background-color: #3182ce;
+        }
+        .quest-card button:disabled {
+            background-color: #a0aec0;
+            cursor: not-allowed;
+        }
+
+        /* Gacha Modal Styles */
+        #gacha-modal .modal-content {
+            width: 500px;
+            text-align: center;
+        }
+        #gacha-result {
+            margin-top: 1.5rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #fcd34d;
+        }
+        #gacha-result .emoji {
+            font-size: 3rem;
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        #gacha-cost {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Endless Mode Specific UI */
+        #endless-score-display {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #fcd34d;
+            margin-left: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Start Screen -->
+    <div id="start-screen">
+        <h1>2D 平台 RPG 遊戲</h1>
+        <div id="game-introduction" class="text-center max-w-md mx-auto mb-8">
+            <h2 class="text-2xl font-bold mb-2 text-blue-300">遊戲介紹</h2>
+            <p class="text-lg text-gray-300">
+                歡迎來到 2D 平台 RPG 遊戲！在這款遊戲中，你將扮演一位勇者，
+                在充滿挑戰的關卡中冒險。擊敗怪物，收集金幣，提升等級，
+                並學習強大的技能來變得更強大！
+            </p>
+            <p class="text-lg text-gray-300 mt-2">
+                使用鍵盤或下方觸控按鈕進行移動和攻擊。祝你好運！
+            </p>
+        </div>
+        <button id="start-normal-game-btn">開始普通模式 (關卡 1)</button>
+        <button id="select-level-btn-home" class="px-4 py-2 bg-indigo-500 text-white rounded-md hover:bg-indigo-600">選擇關卡</button>
+        <button id="start-endless-btn" class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">進入無盡模式</button>
+    </div>
+
+    <!-- Level Select Modal -->
+    <div id="level-select-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close-btn" onclick="closeLevelSelectModal()">✖</button>
+            <h2 class="text-2xl font-bold mb-4">選擇關卡</h2>
+            <div id="level-list" class="modal-item-list">
+                <!-- Level buttons will be generated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <h1 class="text-3xl font-bold mb-4 text-blue-400 hidden" id="game-title">2D 平台 RPG 遊戲 - 完整擴展版</h1>
+    <div id="game-container" class="relative hidden">
+        <canvas id="gameCanvas" width="800" height="450"></canvas>
+        <div id="game-message" class="game-message"></div>
+    </div>
+    
+    <div class="game-ui hidden" id="game-ui-container">
+        <div class="grid grid-cols-3 gap-4 mb-4">
+            <div>
+                <span class="font-bold">HP: <span id="hp-text">100/100</span></span>
+                <div class="stat-bar-container">
+                    <div id="health-bar" class="stat-bar-fill health-bar"></div>
+                </div>
+            </div>
+            <div>
+                <span class="font-bold">MP: <span id="mp-text">50/50</span></span>
+                <div class="stat-bar-container">
+                    <div id="mana-bar" class="stat-bar-fill mana-bar"></div>
+                </div>
+            </div>
+            <div>
+                <span class="font-bold">金幣: <span id="money-text">0</span> 🪙</span>
+                <span class="font-bold ml-4">鑽石: <span id="diamond-text">0</span> 💎</span>
+            </div>
+        </div>
+        <div class="grid grid-cols-3 gap-4 mb-4">
+            <div>
+                <span class="font-bold">等級: <span id="level-text">1</span></span>
+                <span class="font-bold ml-4">經驗值: <span id="xp-text">0/100</span></span>
+                <div class="stat-bar-container">
+                    <div id="xp-bar" class="stat-bar-fill xp-bar"></div>
+                </div>
+            </div>
+            <div class="col-span-2 flex justify-end gap-2">
+                <button id="shop-btn" class="px-4 py-2 bg-green-500 text-white rounded-md hover:bg-green-600">商店</button>
+                <button id="player-info-btn" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600">玩家資訊</button>
+                <button id="quest-btn" class="px-4 py-2 bg-purple-500 text-white rounded-md hover:bg-purple-600">任務</button>
+                <button id="gacha-btn" class="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600">抽獎</button>
+                <button id="endless-shop-btn" class="px-4 py-2 bg-yellow-700 text-white rounded-md hover:bg-yellow-800 hidden">無盡商店</button>
+                <button id="back-to-home-btn" class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700">返回首頁</button>
+            </div>
+        </div>
+        
+        <div class="hotkey-section">
+            <span class="font-bold">物品快捷鍵</span>
+            <div id="item-hotkey-bar" class="hotkey-row">
+                <!-- Item Hotkey slots will be generated by JavaScript -->
+            </div>
+            <span class="font-bold">技能快捷鍵</span>
+            <div id="skill-hotkey-bar" class="hotkey-row">
+                <!-- Skill Hotkey slots will be generated by JavaScript -->
+            </div>
+        </div>
+        <div id="endless-score-display" class="hidden">
+            存活時間: <span id="endless-survival-time">0</span> 秒 / 積分: <span id="endless-score-text">0</span> 🌟
+        </div>
+    </div>
+
+    <!-- 商店 Modal -->
+    <div id="shop-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close-btn" onclick="closeShopModal()">✖</button>
+            <h2 class="text-2xl font-bold mb-4">商店</h2>
+            <div id="shop-item-list" class="modal-item-list">
+                <!-- Shop items will be generated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 玩家資訊 Modal -->
+    <div id="player-info-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close-btn" onclick="closePlayerInfoModal()">✖</button>
+            <h2 class="text-2xl font-bold mb-4">玩家資訊</h2>
+            <div class="grid grid-cols-2 gap-4 mt-4">
+                <div>
+                    <h3 class="text-xl font-bold mb-2">屬性</h3>
+                    <p>等級: <span id="info-level"></span></p>
+                    <p>HP: <span id="info-hp"></span></p>
+                    <p>MP: <span id="info-mp"></span></p>
+                    <p>攻擊力: <span id="info-attack"></span></p>
+                    <p>防禦力: <span id="info-defense"></span></p>
+                    <p>金幣: <span id="info-money"></span></p>
+                    <p>鑽石: <span id="info-diamond"></span></p>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold mb-2">裝備</h3>
+                    <p>武器: <span id="info-weapon">無</span> <button class="text-sm text-blue-400" onclick="player.unequipItem('weapon')">卸下</button></p>
+                    <p>護甲: <span id="info-armor">無</span> <button class="text-sm text-blue-400" onclick="player.unequipItem('armor')">卸下</button></p>
+                    <h3 class="text-xl font-bold mt-4 mb-2">寶物</h3>
+                    <div id="info-treasures">
+                        <!-- Treasures will be listed here -->
+                    </div>
+                </div>
+            </div>
+            <h3 class="text-xl font-bold mt-6 mb-2">物品欄</h3>
+            <div id="inventory-list" class="modal-item-list">
+                <!-- Inventory items will be generated by JavaScript -->
+            </div>
+            <h3 class="text-xl font-bold mt-6 mb-2">技能欄</h3>
+            <div id="skill-list" class="modal-item-list">
+                <!-- Skills will be generated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 任務 Modal -->
+    <div id="quest-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close-btn" onclick="closeQuestModal()">✖</button>
+            <h2 class="text-2xl font-bold mb-4">委託任務</h2>
+            <button id="refresh-quests-btn" class="px-4 py-2 bg-pink-500 text-white rounded-md hover:bg-pink-600 mb-4">刷新任務 (5 鑽石 💎)</button>
+            <div id="quest-list">
+                <!-- Quests will be generated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- 抽獎 Modal -->
+    <div id="gacha-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close-btn" onclick="closeGachaModal()">✖</button>
+            <h2 class="text-2xl font-bold mb-4">幸運抽獎</h2>
+            <p id="gacha-cost">每次抽獎花費: 10 鑽石 💎</p>
+            <button id="draw-gacha-btn" class="px-6 py-3 bg-yellow-600 text-white rounded-md text-lg font-bold hover:bg-yellow-700">抽一次！</button>
+            <div id="gacha-result" class="hidden">
+                <span class="emoji" id="gacha-result-emoji"></span>
+                <span id="gacha-result-name"></span>
+                <p class="text-sm text-gray-400" id="gacha-result-description"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- 無盡商店 Modal -->
+    <div id="endless-shop-modal" class="modal-overlay">
+        <div class="modal-content">
+            <button class="modal-close-btn" onclick="closeEndlessShopModal()">✖</button>
+            <h2 class="text-2xl font-bold mb-4">無盡商店</h2>
+            <p class="text-lg mb-4">你的積分: <span id="current-endless-score">0</span> 🌟</p>
+            <div id="endless-shop-item-list" class="modal-item-list">
+                <!-- Endless shop items will be generated by JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Mobile Controls -->
+    <div id="mobile-controls">
+        <!-- First Row: Movement and Action -->
+        <div class="mobile-control-group">
+            <div class="flex gap-2">
+                <button id="mobile-left-btn" class="mobile-button">◀</button>
+                <button id="mobile-right-btn" class="mobile-button">▶</button>
+            </div>
+            <div class="flex gap-2 ml-auto"> <!-- Pushed to the right -->
+                <button id="mobile-jump-btn" class="mobile-button">⬆</button>
+                <button id="mobile-attack-btn" class="mobile-button action-button">⚔️</button>
+            </div>
+        </div>
+        <!-- Second Row: Hotkeys -->
+        <div class="mobile-control-group justify-center"> <!-- Center all hotkeys -->
+            <button id="mobile-item1-btn" class="mobile-button hotkey-mobile-button item-button">1</button>
+            <button id="mobile-item2-btn" class="mobile-button hotkey-mobile-button item-button">2</button>
+            <button id="mobile-item3-btn" class="mobile-button hotkey-mobile-button item-button">3</button>
+            <button id="mobile-skill1-btn" class="mobile-button hotkey-mobile-button skill-button">4</button>
+            <button id="mobile-skill2-btn" class="mobile-button hotkey-mobile-button skill-button">5</button>
+            <button id="mobile-skill3-btn" class="mobile-button hotkey-mobile-button skill-button">6</button>
+            <button id="mobile-skill4-btn" class="mobile-button hotkey-mobile-button skill-button">7</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameContainer = document.getElementById('game-container');
+        const gameMessageEl = document.getElementById('game-message');
+        const shopModal = document.getElementById('shop-modal');
+        const playerInfoModal = document.getElementById('player-info-modal');
+        const levelSelectModal = document.getElementById('level-select-modal'); 
+        const questModal = document.getElementById('quest-modal');
+        const gachaModal = document.getElementById('gacha-modal');
+        const endlessShopModal = document.getElementById('endless-shop-modal'); // Endless shop modal
+
+        const shopBtn = document.getElementById('shop-btn');
+        const playerInfoBtn = document.getElementById('player-info-btn');
+        const questBtn = document.getElementById('quest-btn');
+        const gachaBtn = document.getElementById('gacha-btn');
+        const startScreen = document.getElementById('start-screen');
+        const startNormalGameBtn = document.getElementById('start-normal-game-btn'); 
+        const selectLevelBtnHome = document.getElementById('select-level-btn-home'); // Moved to home
+        const startEndlessBtn = document.getElementById('start-endless-btn'); 
+        const gameTitle = document.getElementById('game-title');
+        const gameUiContainer = document.getElementById('game-ui-container');
+        const mobileControls = document.getElementById('mobile-controls'); 
+        const refreshQuestsBtn = document.getElementById('refresh-quests-btn'); 
+        const endlessShopBtn = document.getElementById('endless-shop-btn'); 
+        const backToHomeBtn = document.getElementById('back-to-home-btn'); // New button
+
+        // Mobile control buttons
+        const mobileLeftBtn = document.getElementById('mobile-left-btn');
+        const mobileRightBtn = document.getElementById('mobile-right-btn');
+        const mobileJumpBtn = document.getElementById('mobile-jump-btn');
+        const mobileAttackBtn = document.getElementById('mobile-attack-btn');
+        const mobileItem1Btn = document.getElementById('mobile-item1-btn');
+        const mobileItem2Btn = document.getElementById('mobile-item2-btn');
+        const mobileItem3Btn = document.getElementById('mobile-item3-btn');
+        const mobileSkill1Btn = document.getElementById('mobile-skill1-btn');
+        const mobileSkill2Btn = document.getElementById('mobile-skill2-btn');
+        const mobileSkill3Btn = document.getElementById('mobile-skill3-btn');
+        const mobileSkill4Btn = document.getElementById('mobile-skill4-btn');
+
+        // Gacha elements
+        const drawGachaBtn = document.getElementById('draw-gacha-btn');
+        const gachaResultEl = document.getElementById('gacha-result');
+        const gachaResultEmojiEl = document.getElementById('gacha-result-emoji');
+        const gachaResultNameEl = document.getElementById('gacha-result-name');
+        const gachaResultDescriptionEl = document.getElementById('gacha-result-description');
+
+        // Endless mode elements
+        const endlessScoreDisplay = document.getElementById('endless-score-display');
+        const endlessSurvivalTimeText = document.getElementById('endless-survival-time');
+        const endlessScoreText = document.getElementById('endless-score-text');
+        const currentEndlessScoreText = document.getElementById('current-endless-score');
+
+
+        // Game settings
+        const gravity = 0.6;
+        let projectiles = [];
+        let loots = [];
+        let platforms = [];
+        let gameLevel = 1; // Current level for normal mode
+        let gameMode = 'normal'; // 'normal' or 'endless'
+        let levelTransitionActive = false; // Flag to prevent immediate level clear re-trigger
+
+        // Endless mode specific variables
+        let endlessScore = 0;
+        let endlessSurvivalTimer = 0; // in seconds
+        let monsterSpawnTimer = 0; // in milliseconds
+        let monsterSpawnInterval = 2000; // milliseconds, initial spawn rate
+        let monstersKilledInEndless = 0;
+        let lastTime = 0; // For deltaTime calculation
+        let endlessBossSpawnTimer = 0;
+        const endlessBossSpawnInterval = 60000; // 60 seconds
+        let isBossActive = false; // Flag to check if boss is currently in play
+
+        // Keyboard input state
+        const keys = {
+            a: { pressed: false },
+            d: { pressed: false },
+            w: { pressed: false },
+        };
+
+        // Damage text array
+        let damageTexts = [];
+
+        // Tone.js Synths for sound effects
+        let buttonClickSynth;
+        let attackSynth;
+        let damageSynth;
+
+        // Function to initialize Tone.js synths
+        function initAudio() {
+            // Simple synth for button clicks
+            buttonClickSynth = new Tone.Synth({
+                oscillator: { type: "sine" },
+                envelope: {
+                    attack: 0.005,
+                    decay: 0.1,
+                    sustain: 0.05,
+                    release: 0.1
+                }
+            }).toDestination();
+
+            // Synth for attack sound (more percussive)
+            attackSynth = new Tone.NoiseSynth({
+                noise: { type: "white" },
+                envelope: {
+                    attack: 0.001,
+                    decay: 0.1,
+                    sustain: 0,
+                    release: 0.1
+                }
+            }).toDestination();
+
+            // Synth for damage sound (lower frequency, slightly longer decay)
+            damageSynth = new Tone.Synth({
+                oscillator: { type: "triangle" },
+                envelope: {
+                    attack: 0.01,
+                    decay: 0.2,
+                    sustain: 0.1,
+                    release: 0.3
+                }
+            }).toDestination();
+        }
+
+        // Play sound functions with debounce
+        let buttonClickSoundTimeout = null;
+        let attackSoundTimeout = null;
+        let damageSoundTimeout = null;
+
+        function playButtonClickSound() {
+            if (buttonClickSoundTimeout) clearTimeout(buttonClickSoundTimeout);
+            buttonClickSoundTimeout = setTimeout(() => {
+                if (buttonClickSynth) buttonClickSynth.triggerAttackRelease("C4", "8n");
+                buttonClickSoundTimeout = null;
+            }, 50); // Small delay to debounce rapid clicks
+        }
+
+        function playAttackSound() {
+            if (attackSoundTimeout) clearTimeout(attackSoundTimeout);
+            attackSoundTimeout = setTimeout(() => {
+                if (attackSynth) attackSynth.triggerAttackRelease("8n");
+                attackSoundTimeout = null;
+            }, 50);
+        }
+
+        function playDamageSound() {
+            if (damageSoundTimeout) clearTimeout(damageSoundTimeout);
+            damageSoundTimeout = setTimeout(() => {
+                if (damageSynth) damageSynth.triggerAttackRelease("C2", "4n");
+                damageSoundTimeout = null;
+            }, 50);
+        }
+
+
+        // Helper function: Image loader (now returns Promise)
+        function createImage(src) {
+            return new Promise((resolve, reject) => {
+                const image = new Image();
+                image.onload = () => resolve(image);
+                image.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+                image.src = src;
+            });
+        }
+
+        // Resource variables (declared first, assigned after loading)
+        let platformImage;
+
+        // Preload only platform image
+        async function preloadImages() {
+            try {
+                platformImage = await createImage('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAAAoCAYAAAC7HLUcAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsEAAA7BAbiRa+0AAAGHaVRYdFhNTDpjb20uYWRvYmUueG1wAAAAAAA8P3hwYWNrZXQgYmVnaW49J++7vycgaWQ9J1c1TTBNcENlaGlIenJlU3pOVGN6a2M5ZCc/Pg0KPHg6eG1wbWV0YSB4bWxuczp4PSJhZG9iZTpuczptZXRhLyI+PHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj48cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0idXVpZDpmYWY1YmRkNS1iYTNkLTExZGEtYWQzMS1kMzNkNzUxODJmMWIiIHhtbG5zOnRpZmY9Imh0dHA6Ly9ucy5hZG9iZS5jb20vdGlmZi8xLjAvIj48dGlmZjpPcmllbnRhdGlvbj4xPC90aWZmOk9yaWVudGF0aW9uPjwvcmRmOkRlc2NyaXB0aW9uPjwvcmRmOlJERj48L3g6eG1wbWV0YT4NCjw/eHBhY2tldCBlbmQ9J3cnPz4slJgLAAAA3ElEQVR4Xu3cMQ6DMBREQZNLcFzEcTlFUoXEyF5RJb+YqVBoVpGeTOWltfZswNDj+gPwsXyfINu29W//bN/389m2e6ruunrvrLjx+z90gkAgEAimn1jrup7Pv3Qcx/k8+1ywrVd119VoZ5WNo23NCQKZQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEAgEAoFAIBAIBAKBQCAQCAQCgUAgEExvd69gdlN5BVW3Vd11NbrdvQq3u8NNAoGg+8QCek4QCF4qG0FHk8OzAQAAAABJRU5ErkJggg==');
+                console.log('所有圖片載入完成！');
+                return true;
+            } catch (error) {
+                console.error('圖片載入失敗:', error);
+                showMessage('遊戲資源載入失敗，請重新整理。', 5000);
+                return false;
+            }
+        }
+
+        // Sprite Animation Class (now only for platforms)
+        class Sprite {
+            constructor({ position, image, framesMax = 1, scale = 1, width = null, height = null }) {
+                this.position = position;
+                this.image = image;
+                this.framesMax = framesMax;
+                this.scale = scale;
+                this.framesCurrent = 0;
+                this.framesElapsed = 0;
+                this.framesHold = 5;
+                // Use provided width/height, otherwise calculate from image
+                this.width = width !== null ? width : (this.image ? this.image.width / this.framesMax : 0);
+                this.height = height !== null ? height : (this.image ? this.image.height : 0);
+            }
+
+            draw() {
+                if (!this.image || !this.image.complete) {
+                    return;
+                }
+                ctx.drawImage(
+                    this.image,
+                    this.framesCurrent * (this.image.width / this.framesMax),
+                    0,
+                    this.image.width / this.framesMax,
+                    this.image.height,
+                    this.position.x,
+                    this.position.y,
+                    this.width * this.scale, // Use this.width
+                    this.height * this.scale  // Use this.height
+                );
+            }
+
+            update() {
+                this.draw();
+                this.framesElapsed++;
+                if (this.framesElapsed % this.framesHold === 0) {
+                    if (this.framesCurrent < this.framesMax - 1) {
+                        this.framesCurrent++;
+                    } else {
+                        this.framesCurrent = 0;
+                    }
+                }
+            }
+        }
+
+        // Platform Class
+        class Platform extends Sprite {
+            constructor({ x, y, image, width = null, height = null }) {
+                super({ position: { x, y }, image, width, height });
+            }
+            // Platforms don't need update animation, just draw
+            draw() {
+                if (!this.image || !this.image.complete) {
+                    // Fallback for platform if image fails to load
+                    ctx.fillStyle = '#805AD5'; // Purple color
+                    ctx.fillRect(this.position.x, this.position.y, this.width, this.height);
+                    return;
+                }
+                ctx.drawImage(
+                    this.image,
+                    this.framesCurrent * (this.image.width / this.framesMax),
+                    0,
+                    this.image.width / this.framesMax,
+                    this.image.height,
+                    this.position.x,
+                    this.position.y,
+                    this.width, // Use the actual width
+                    this.height // Use the actual height
+                );
+            }
+        }
+
+        // Player Class
+        class Player { // Player is no longer a Sprite, it draws an emoji
+            constructor() {
+                this.position = { x: 100, y: 100 };
+                this.velocity = { x: 0, y: 0 };
+                this.width = 40;
+                this.height = 60;
+                this.speed = 5;
+                this.jumpPower = -15;
+                
+                this.stats = {
+                    baseMaxHp: 100,
+                    baseAttack: 10,
+                    baseDefense: 0,
+                    currentHp: 100,
+                    maxMp: 50,
+                    currentMp: 50,
+                    money: 0,
+                    diamonds: 0, // New currency
+                    level: 1,
+                    xp: 0,
+                    xpToNextLevel: 100
+                };
+
+                this.attackBox = {
+                    position: { x: this.position.x, y: this.position.y },
+                    width: 80,
+                    height: 30,
+                    offset: { x: 10, y: 15 }
+                };
+                this.isAttacking = false;
+                this.attackCooldown = 500;
+                this.lastAttackTime = 0;
+                this.facing = 'right'; // 'right' or 'left'
+
+                this.emoji = '🦸'; // Superhero emoji
+                this.emojiSize = 50; // Size of the emoji
+
+                this.inventory = []; 
+                this.equipment = { 
+                    weapon: null,
+                    armor: null
+                };
+                this.treasures = []; // New: Stores permanent treasures
+                this.calculateEffectiveStats(); // Calculate initial stats
+            }
+
+            // Calculate effective stats based on base, equipment, and treasures
+            calculateEffectiveStats() {
+                let effectiveMaxHp = this.stats.baseMaxHp;
+                let effectiveAttack = this.stats.baseAttack;
+                let effectiveDefense = this.stats.baseDefense;
+
+                // Apply equipment bonuses
+                if (this.equipment.weapon) {
+                    effectiveAttack += this.equipment.weapon.attackBonus;
+                }
+                if (this.equipment.armor) {
+                    effectiveMaxHp += this.equipment.armor.hpBonus;
+                    effectiveDefense += this.equipment.armor.defenseBonus;
+                }
+
+                // Apply treasure percentage bonuses
+                this.treasures.forEach(treasure => {
+                    if (treasure.statsBonus.attackPercent) {
+                        effectiveAttack *= (1 + treasure.statsBonus.attackPercent);
+                    }
+                    if (treasure.statsBonus.hpPercent) {
+                        effectiveMaxHp *= (1 + treasure.statsBonus.hpPercent);
+                    }
+                    if (treasure.statsBonus.defensePercent) {
+                        effectiveDefense *= (1 + treasure.statsBonus.defensePercent);
+                    }
+                    if (treasure.statsBonus.xpGainPercent) { 
+                        // This is a global multiplier, not applied to effective stats directly
+                    }
+                });
+
+                // Update player's current stats (round to nearest integer)
+                this.stats.maxHp = Math.round(effectiveMaxHp);
+                this.stats.attack = Math.round(effectiveAttack);
+                this.stats.defense = Math.round(effectiveDefense);
+
+                // Ensure current HP doesn't exceed new max HP
+                this.stats.currentHp = Math.min(this.stats.currentHp, this.stats.maxHp);
+            }
+
+            draw() {
+                ctx.font = `${this.emojiSize}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.emoji, this.position.x + this.width / 2, this.position.y + this.height / 2);
+            }
+
+            update() {
+                this.position.x += this.velocity.x;
+                this.position.y += this.velocity.y;
+                this.draw();
+
+                if (this.facing === 'right') {
+                    this.attackBox.position.x = this.position.x + this.width - 10; // Adjusted for right swing
+                } else {
+                    this.attackBox.position.x = this.position.x - this.attackBox.width + 10; // Adjusted for left swing
+                }
+                this.attackBox.position.y = this.position.y + this.height / 2 - this.attackBox.height / 2; // Centered vertically
+
+                this.velocity.y += gravity;
+
+                this.velocity.x = 0;
+                if (keys.a.pressed) {
+                    this.velocity.x = -this.speed;
+                    this.facing = 'left';
+                } else if (keys.d.pressed) {
+                    this.velocity.x = this.speed;
+                    this.facing = 'right';
+                } 
+
+                if (this.position.x < 0) this.position.x = 0;
+                if (this.position.x + this.width > canvas.width) this.position.x = canvas.width - this.width;
+                
+                if (this.stats.currentHp <= 0) {
+                    gameOver();
+                }
+            }
+            
+            attack() {
+                const now = Date.now();
+                if (now - this.lastAttackTime < this.attackCooldown) return;
+                this.isAttacking = true;
+                this.lastAttackTime = now;
+                playAttackSound(); 
+                // isAttacking will be set to false at the end of the animate loop
+            }
+            
+            rangedAttack() {
+                const manaCost = 10;
+                if (this.stats.currentMp < manaCost) {
+                    console.log("魔力不足!");
+                    showMessage("魔力不足!", 1000);
+                    return;
+                }
+                this.stats.currentMp -= manaCost;
+                updateUI();
+                
+                const velocityX = this.facing === 'right' ? 10 : -10;
+                const skill = playerSkills.find(s => s.id === 'fireball'); 
+                const skillDamage = this.stats.attack * (skill.coefficient || 1.5);
+
+                let projectileCount = 1;
+                let baseRadius = 8;
+                if (skill.level >= 5) {
+                    projectileCount = 2; 
+                    baseRadius = 12; 
+                }
+                
+                for (let i = 0; i < projectileCount; i++) {
+                    let offsetY = 0;
+                    if (projectileCount > 1) {
+                        offsetY = (i === 0 ? -5 : 5); 
+                    }
+                    projectiles.push(new Projectile({
+                        position: {
+                            x: this.position.x + this.width / 2,
+                            y: this.position.y + player.height / 2 + offsetY
+                        },
+                        velocity: { x: velocityX, y: 0 },
+                        damage: skillDamage,
+                        radius: baseRadius 
+                    }));
+                }
+            }
+
+            takeDamage(damage) {
+                const finalDamage = Math.max(0, damage - this.stats.defense);
+                this.stats.currentHp -= finalDamage;
+                if (this.stats.currentHp < 0) this.stats.currentHp = 0;
+                createDamageText(finalDamage, this.position.x + this.width / 2, this.position.y);
+                playDamageSound(); 
+                updateUI();
+            }
+
+            addXp(amount) {
+                let actualXp = amount;
+                const xpBooster = this.treasures.find(t => t.id === 'xp_booster');
+                if (xpBooster && xpBooster.statsBonus.xpGainPercent) {
+                    actualXp *= (1 + xpBooster.statsBonus.xpGainPercent);
+                }
+                this.stats.xp += actualXp;
+
+                if (this.stats.xp >= this.stats.xpToNextLevel) {
+                    this.levelUp();
+                }
+                updateUI();
+            }
+
+            levelUp() {
+                this.stats.level++;
+                this.stats.xp -= this.stats.xpToNextLevel;
+                this.stats.xpToNextLevel = Math.floor(this.stats.xpToNextLevel * 1.5);
+                
+                this.stats.baseMaxHp += 20; // Increase base HP
+                this.stats.baseAttack += 5; // Increase base Attack
+                this.stats.baseDefense += 1; // Increase base Defense
+
+                this.calculateEffectiveStats(); // Recalculate effective stats
+                this.stats.currentHp = this.stats.maxHp; // Heal to full HP
+                this.stats.maxMp += 10;
+                this.stats.currentMp = this.stats.maxMp;
+
+                showMessage(`等級提升! 現在是 Lv.${this.stats.level}`, 2000);
+                
+                if (this.stats.level % 5 === 0) {
+                    const fireballSkill = playerSkills.find(s => s.id === 'fireball');
+                    if (fireballSkill) {
+                        this.upgradeSkill(fireballSkill.id);
+                    }
+                }
+                
+                updateQuestProgress('levelUp', 1); // Update quest progress
+                updateUI();
+            }
+
+            upgradeSkill(skillId) {
+                const skill = playerSkills.find(s => s.id === skillId);
+                if (skill) {
+                    skill.level++;
+                    skill.coefficient += 0.2; 
+                    showMessage(`${skill.name} 技能升級了! Lv.${skill.level}`, 2000);
+                }
+            }
+
+            addItem(item, quantity = 1) {
+                const existingItem = this.inventory.find(i => i.item.id === item.id);
+                if (existingItem) {
+                    existingItem.quantity += quantity;
+                } else {
+                    this.inventory.push({ item, quantity });
+                }
+                updateUI();
+            }
+
+            removeItem(itemId, quantity = 1) {
+                const itemIndex = this.inventory.findIndex(i => i.item.id === itemId);
+                if (itemIndex !== -1) {
+                    this.inventory[itemIndex].quantity -= quantity;
+                    if (this.inventory[itemIndex].quantity <= 0) {
+                        this.inventory.splice(itemIndex, 1);
+                    }
+                }
+                updateUI();
+            }
+
+            equipItem(item) {
+                if (item.type === 'weapon') {
+                    if (this.equipment.weapon) {
+                        this.addItem(this.equipment.weapon); 
+                    }
+                    this.equipment.weapon = item;
+                } else if (item.type === 'armor') {
+                    if (this.equipment.armor) {
+                        this.addItem(this.equipment.armor);
+                    }
+                    this.equipment.armor = item;
+                }
+                this.removeItem(item.id); 
+                this.calculateEffectiveStats(); // Recalculate stats after equipping
+                showMessage(`裝備了 ${item.name}！`, 1000);
+                updateUI();
+            }
+
+            unequipItem(slotType) {
+                const item = this.equipment[slotType];
+                if (item) {
+                    this.addItem(item); 
+                    this.equipment[slotType] = null;
+                    this.calculateEffectiveStats(); // Recalculate stats after unequipping
+                    showMessage(`卸下了 ${item.name}！`, 1000);
+                    updateUI();
+                }
+            }
+
+            addMoney(amount) {
+                let actualAmount = amount;
+                const goldMagnet = this.treasures.find(t => t.id === 'gold_magnet');
+                if (goldMagnet && goldMagnet.statsBonus.goldDropPercent) {
+                    actualAmount *= (1 + goldMagnet.statsBonus.goldDropPercent);
+                }
+                this.stats.money += Math.round(actualAmount);
+                updateQuestProgress('gainGold', amount); // Update quest progress
+                updateUI();
+            }
+
+            spendMoney(amount) {
+                if (this.stats.money >= amount) {
+                    this.stats.money -= amount;
+                    updateQuestProgress('spendGold', amount); // Update quest progress
+                    updateUI();
+                    return true;
+                }
+                return false;
+            }
+
+            addDiamonds(amount) {
+                this.stats.diamonds += amount;
+                updateUI();
+            }
+
+            addEndlessScore(amount) {
+                endlessScore += amount;
+                updateUI();
+            }
+
+            spendEndlessScore(amount) {
+                if (endlessScore >= amount) {
+                    endlessScore -= amount;
+                    updateUI();
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        // Monster Class (now draws emojis and follows player)
+        class Monster {
+            constructor({ position, emoji, emojiSize, stats, type = 'ground', isBoss = false, isElite = false, dropsSkill = null }) {
+                this.position = position;
+                this.emoji = emoji;
+                this.emojiSize = emojiSize;
+                this.stats = stats;
+                this.type = type;
+                this.isAlive = true;
+                this.attackCooldown = 1000;
+                this.lastAttackTime = 0;
+                this.isBoss = isBoss;
+                this.isElite = isElite;
+                this.dropsSkill = dropsSkill; 
+                this.width = isBoss ? 80 : (isElite ? 60 : 50); // Fixed width for collision
+                this.height = isBoss ? 80 : (isElite ? 60 : 50); // Fixed height for collision
+                this.velocity = { x: 0, y: 0 }; // Initialize velocity
+            }
+
+            draw() {
+                ctx.font = `${this.emojiSize}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.emoji, this.position.x + this.width / 2, this.position.y + this.height / 2);
+            }
+
+            update() {
+                if (!this.isAlive) return; // Stop updating if dead
+                this.draw();
+
+                // Movement logic: follow player
+                const playerCenterX = player.position.x + player.width / 2;
+                const monsterCenterX = this.position.x + this.width / 2;
+                const speed = this.isBoss ? 2.5 : (this.isElite ? 1.8 : 1.5); // Boss, Elite, Regular speeds
+
+                // Horizontal movement towards player
+                if (monsterCenterX < playerCenterX - 10) { // Monster is to the left of player
+                    this.velocity.x = speed;
+                } else if (monsterCenterX > playerCenterX + 10) { // Monster is to the right of player
+                    this.velocity.x = -speed;
+                } else {
+                    this.velocity.x = 0; // Stop if horizontally aligned
+                }
+
+                this.position.x += this.velocity.x;
+
+                if (this.type === 'flying') {
+                    const playerCenterY = player.position.y + player.height / 2;
+                    const monsterCenterY = this.position.y + this.height / 2;
+                    const verticalSpeed = 0.5; // Flying monsters move vertically slower
+
+                    // Vertical movement towards player
+                    if (monsterCenterY < playerCenterY - 5) {
+                        this.velocity.y = verticalSpeed;
+                    } else if (monsterCenterY > playerCenterY + 5) {
+                        this.velocity.y = -verticalSpeed;
+                    } else {
+                        this.velocity.y = 0;
+                    }
+                    this.position.y += this.velocity.y;
+                } else {
+                    this.velocity.y += gravity; // Ground monsters still affected by gravity
+                }
+                
+                // Keep monster within canvas bounds horizontally
+                if (this.position.x < 0) this.position.x = 0;
+                if (this.position.x + this.width > canvas.width) this.position.x = canvas.width - this.width;
+
+                this.attackPlayer(player); // Monster attacks player if in range
+            }
+
+            attackPlayer(targetPlayer) {
+                const now = Date.now();
+                if (now - this.lastAttackTime < this.attackCooldown) {
+                    return;
+                }
+
+                // Check for collision with player
+                if (this.position.x < targetPlayer.position.x + targetPlayer.width &&
+                    this.position.x + this.width > targetPlayer.position.x &&
+                    this.position.y < targetPlayer.position.y + targetPlayer.height &&
+                    this.position.y + this.height > targetPlayer.position.y) {
+                    
+                    targetPlayer.takeDamage(this.stats.attack);
+                    this.lastAttackTime = now;
+                }
+            }
+
+            takeDamage(damage) {
+                this.stats.currentHp -= damage;
+                createDamageText(damage, this.position.x + this.width / 2, this.position.y);
+                if (this.stats.currentHp <= 0) {
+                    this.die();
+                }
+            }
+
+            die() {
+                this.isAlive = false;
+                player.addXp(this.stats.xpDrop || 20);
+                player.addMoney(this.stats.moneyDrop || 10); 
+
+                loots.push(new Loot({
+                    position: { x: this.position.x + this.width / 2, y: this.position.y + this.height - 20 },
+                    value: this.stats.moneyDrop || 10 
+                }));
+
+                if (gameMode === 'normal') {
+                    updateQuestProgress('killMonster', 1); 
+                    if (this.isBoss) {
+                        updateQuestProgress('defeatBoss', 1); 
+                    }
+                } else if (gameMode === 'endless') {
+                    monstersKilledInEndless++; 
+                    if (this.isBoss) {
+                        isBossActive = false; // Boss defeated
+                        player.addEndlessScore(50); // Bonus score for defeating boss
+                        showMessage("無盡模式 Boss 已擊敗！", 2000);
+                    } else if (this.isElite) {
+                        player.addEndlessScore(5); // Bonus score for defeating elite
+                    }
+                }
+
+                if (this.isBoss && this.dropsSkill) {
+                    const newSkill = allSkills.find(s => s.id === this.dropsSkill);
+                    if (newSkill && !playerSkills.some(s => s.id === newSkill.id)) {
+                        playerSkills.push(newSkill);
+                        const emptySlotIndex = playerSkillHotkeys.findIndex(slot => slot === null);
+                        if (emptySlotIndex !== -1) {
+                            playerSkillHotkeys[emptySlotIndex] = { skill: newSkill, quantity: Infinity };
+                        }
+                        showMessage(`獲得新技能: ${newSkill.name}！`, 3000);
+                    }
+                }
+            }
+        }
+
+        // Projectile Class
+        class Projectile {
+            constructor({ position, velocity, damage, radius = 8, color = '#f6ad55' }) {
+                this.position = position;
+                this.velocity = velocity;
+                this.radius = radius;
+                this.color = color;
+                this.damage = damage;
+            }
+
+            draw() {
+                ctx.beginPath();
+                ctx.arc(this.position.x, this.position.y, this.radius, 0, Math.PI * 2);
+                ctx.fillStyle = this.color;
+                ctx.fill();
+            }
+
+            update() {
+                this.draw();
+                this.position.x += this.velocity.x;
+                this.position.y += this.velocity.y;
+            }
+        }
+        
+        // Loot Class
+        class Loot {
+            constructor({ position, value }) {
+                this.position = position;
+                this.value = value;
+                this.width = 15;
+                this.height = 15;
+                this.emoji = '🪙';
+            }
+
+            draw() {
+                ctx.font = '20px serif';
+                ctx.fillText(this.emoji, this.position.x, this.position.y);
+            }
+
+            update() {
+                this.draw();
+            }
+        }
+        
+        // Item Class
+        class Item {
+            constructor(id, name, emoji, type, price, description = '', effect = null) {
+                this.id = id;
+                this.name = name;
+                this.emoji = emoji;
+                this.type = type; 
+                this.price = price;
+                this.description = description;
+                this.effect = effect;
+            }
+        }
+
+        // Equipment Class (inherits from Item)
+        class Equipment extends Item {
+            constructor(id, name, emoji, type, price, description, statsBonus) {
+                super(id, name, emoji, type, price, description);
+                this.statsBonus = statsBonus;
+                this.attackBonus = statsBonus.attackBonus || 0;
+                this.hpBonus = statsBonus.hpBonus || 0;
+                this.defenseBonus = statsBonus.defenseBonus || 0; 
+            }
+        }
+
+        // Skill Class (inherits from Item)
+        class Skill extends Item {
+            constructor(id, name, emoji, price, description, effect, coefficient = 1.0, level = 1) {
+                super(id, name, emoji, 'skill', price, description, effect);
+                this.coefficient = coefficient;
+                this.level = level;
+            }
+        }
+
+        // Treasure Class (new type of item)
+        class Treasure extends Item {
+            constructor(id, name, emoji, type, price, description, statsBonus) {
+                super(id, name, emoji, type, price, description);
+                this.statsBonus = statsBonus; 
+            }
+        }
+        
+        // Initialize game objects
+        let player;
+        let monsters = [];
+        
+        // Item Database (includes new treasures for gacha)
+        const itemDatabase = [
+            new Item('hp_potion', 'HP藥水', '🧪', 'potion', 20, '恢復 30 點生命值', () => {
+                const healAmount = 30;
+                player.stats.currentHp = Math.min(player.stats.maxHp, player.stats.currentHp + healAmount);
+                showMessage("使用 HP 藥水", 1000);
+            }),
+            new Item('mp_potion', 'MP藥水', '💧', 'potion', 15, '恢復 20 點魔力值', () => {
+                const manaAmount = 20;
+                player.stats.currentMp = Math.min(player.stats.maxMp, player.stats.currentMp + manaAmount);
+                showMessage("使用 MP 藥水", 1000);
+            }),
+            new Equipment('basic_sword', '基本劍', '🗡️', 'weapon', 50, '增加 10 點攻擊力', { attackBonus: 10 }),
+            new Equipment('basic_armor', '基本護甲', '🛡️', 'armor', 75, '增加 30 點生命值和 5 點防禦力', { hpBonus: 30, defenseBonus: 5 }),
+            new Equipment('iron_sword', '鐵劍', '⚔️', 'weapon', 150, '增加 25 點攻擊力', { attackBonus: 25 }),
+            new Equipment('iron_armor', '鐵護甲', '🪖', 'armor', 200, '增加 60 點生命值和 10 點防禦力', { hpBonus: 60, defenseBonus: 10 }),
+            // New Equipment
+            new Equipment('silver_sword', '銀劍', '✨⚔️', 'weapon', 300, '增加 40 點攻擊力', { attackBonus: 40 }),
+            new Equipment('gold_armor', '黃金護甲', '👑🛡️', 'armor', 400, '增加 120 點生命值和 15 點防禦力', { hpBonus: 120, defenseBonus: 15 }),
+            new Equipment('legendary_bow', '傳說弓', '🏹', 'weapon', 600, '增加 60 點攻擊力 (遠程)', { attackBonus: 60 }),
+        ];
+
+        // All possible skills (including those dropped by bosses)
+        const allSkills = [
+            new Skill('fireball', '火球術', '🔥', 0, '發射火球攻擊敵人', () => {
+                const manaCost = 10;
+                if (player.stats.currentMp < manaCost) {
+                    showMessage("魔力不足!", 1000);
+                    return;
+                }
+                player.stats.currentMp -= manaCost;
+                updateUI();
+                
+                const velocityX = player.facing === 'right' ? 10 : -10;
+                const skill = playerSkills.find(s => s.id === 'fireball'); 
+                const skillDamage = player.stats.attack * (skill.coefficient || 1.5);
+
+                let projectileCount = 1;
+                let baseRadius = 8;
+                if (skill.level >= 5) {
+                    projectileCount = 2; 
+                    baseRadius = 12; 
+                }
+                
+                for (let i = 0; i < projectileCount; i++) {
+                    let offsetY = 0;
+                    if (projectileCount > 1) {
+                        offsetY = (i === 0 ? -5 : 5); 
+                    }
+                    projectiles.push(new Projectile({
+                        position: {
+                            x: player.position.x + player.width / 2,
+                            y: player.position.y + player.height / 2 + offsetY
+                        },
+                        velocity: { x: velocityX, y: 0 },
+                        damage: skillDamage,
+                        radius: baseRadius 
+                    }));
+                }
+            }, 1.5, 1),
+            new Skill('ice_shard', '冰凍術', '❄️', 0, '發射冰錐，有機會凍結敵人', () => {
+                const manaCost = 15;
+                if (player.stats.currentMp < manaCost) {
+                    showMessage("魔力不足!", 1000);
+                    return;
+                }
+                player.stats.currentMp -= manaCost;
+                updateUI();
+                const velocityX = player.facing === 'right' ? 12 : -12;
+                const skillDamage = player.stats.attack * 1.8; 
+                projectiles.push(new Projectile({
+                    position: {
+                        x: player.position.x + player.width / 2,
+                        y: player.position.y + player.height / 2
+                    },
+                    velocity: { x: velocityX, y: 0 },
+                    damage: skillDamage,
+                    color: '#63b3ed' 
+                }));
+                showMessage("施放冰凍術！", 1000);
+            }),
+            // New Skills
+            new Skill('thunder_strike', '雷擊術', '⚡', 0, '召喚閃電攻擊單一敵人，造成大量傷害', () => {
+                const manaCost = 25;
+                if (player.stats.currentMp < manaCost) {
+                    showMessage("魔力不足!", 1000);
+                    return;
+                }
+                player.stats.currentMp -= manaCost;
+                updateUI();
+                // For simplicity, make it a powerful projectile
+                const velocityX = player.facing === 'right' ? 15 : -15;
+                const skillDamage = player.stats.attack * 3.0; // High coefficient
+                projectiles.push(new Projectile({
+                    position: {
+                        x: player.position.x + player.width / 2,
+                        y: player.position.y + player.height / 2
+                    },
+                    velocity: { x: velocityX, y: 0 },
+                    damage: skillDamage,
+                    radius: 15, // Larger projectile
+                    color: '#fcd34d' // Yellow for lightning
+                }));
+                showMessage("施放雷擊術！", 1000);
+            }),
+            new Skill('heal', '治療術', '💚', 0, '恢復自身生命值', () => {
+                const manaCost = 15;
+                if (player.stats.currentMp < manaCost) {
+                    showMessage("魔力不足!", 1000);
+                    return;
+                }
+                player.stats.currentMp -= manaCost;
+                const healAmount = player.stats.maxHp * 0.3; // Heals 30% of max HP
+                player.stats.currentHp = Math.min(player.stats.maxHp, player.stats.currentHp + healAmount);
+                showMessage("施放治療術！", 1000);
+                updateUI();
+            })
+        ];
+
+        // Player's currently learned skills (initially only fireball)
+        const playerSkills = [
+            allSkills.find(s => s.id === 'fireball')
+        ];
+
+        // Player hotkeys (divided into items and skills)
+        const playerItemHotkeys = [
+            { item: itemDatabase[0], quantity: 5 }, 
+            { item: itemDatabase[1], quantity: 3 }, 
+            null 
+        ];
+
+        const playerSkillHotkeys = [
+            { skill: playerSkills[0], quantity: Infinity }, 
+            null,
+            null,
+            null
+        ];
+
+        // Level Configurations - Expanded to 10 maps with cycling logic
+        const levelConfigurations = {
+            1: { // Forest
+                platforms: [
+                    { x: 0, y: 380 }, { x: 200, y: 380 }, { x: 400, y: 380 }, { x: 600, y: 380 },
+                    { x: 300, y: 250 }, { x: 550, y: 150 }, 
+                    { x: 0, y: 430, width: 800, height: 20 } // Bottom collision platform
+                ],
+                monsters: [
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 450, y: 330 },
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 700, y: 330 },
+                    { emoji: '🦇', emojiSize: 40, type: 'flying', x: 580, y: 80 }
+                ],
+                background: 'https://pic.616pic.com/bg_w1180/00/06/56/vMmBhtKoFc.jpg'
+            },
+            2: { // Cave
+                platforms: [
+                    { x: 50, y: 350 }, { x: 250, y: 280 }, { x: 450, y: 350 }, { x: 650, y: 280 },
+                    { x: 0, y: 430, width: 800, height: 20 } // Bottom collision platform
+                ],
+                monsters: [
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 100, y: 300 },
+                    { emoji: '🦇', emojiSize: 40, type: 'flying', x: 300, y: 150 },
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 500, y: 300 },
+                    { emoji: '🦇', emojiSize: 40, type: 'flying', x: 700, y: 150 }
+                ],
+                background: 'https://thumb.ac-illust.com/64/64467c262ed143a6f32018fd810f5672_t.jpeg'
+            },
+            3: { // Ruins
+                platforms: [
+                    { x: 100, y: 300 }, { x: 400, y: 200 }, { x: 650, y: 350 },
+                    { x: 0, y: 430, width: 800, height: 20 } // Bottom collision platform
+                ],
+                monsters: [
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 150, y: 250 },
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 500, y: 150 },
+                    { emoji: '🦇', emojiSize: 40, type: 'flying', x: 300, y: 100 },
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 700, y: 300 }
+                ],
+                background: 'https://watermark.lovepik.com/photo/40085/0468.jpg_wh1200.jpg'
+            },
+            4: { // Desert
+                platforms: [
+                    { x: 0, y: 380 }, { x: 150, y: 280 }, { x: 300, y: 180 }, { x: 450, y: 280 }, { x: 600, y: 380 },
+                    { x: 0, y: 430, width: 800, height: 20 } // Bottom collision platform
+                ],
+                monsters: [
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 100, y: 330 },
+                    { emoji: '🦇', emojiSize: 40, type: 'flying', x: 350, y: 100 },
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 650, y: 330 }
+                ],
+                background: 'https://pic.616pic.com/bg_w1180/00/04/58/R71n107teY.jpg'
+            },
+            5: { // Ice Cavern - Now with Elite Monster
+                platforms: [
+                    { x: 0, y: 350 }, { x: 200, y: 250 }, { x: 400, y: 150 }, { x: 600, y: 250 }, 
+                    { x: 0, y: 430, width: 800, height: 20 } // Bottom collision platform
+                ],
+                monsters: [
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 100, y: 300 },
+                    { emoji: '🦇', emojiSize: 40, type: 'flying', x: 300, y: 100 },
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 700, y: 300 },
+                    { emoji: '😈', emojiSize: 60, type: 'ground', isElite: true, x: 400, y: 300 } // Elite monster
+                ],
+                background: 'https://img.freepik.com/premium-photo/ice-cave-winter-frozen-nature-background-landscape_548821-43020.jpg'
+            },
+            6: { // Volcano
+                platforms: [
+                    { x: 0, y: 400 }, { x: 250, y: 300 }, { x: 500, y: 200 }, 
+                    { x: 0, y: 430, width: 800, height: 20 } // Bottom collision platform
+                ],
+                monsters: [
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 100, y: 350 },
+                    { emoji: '🦇', emojiSize: 40, type: 'flying', x: 400, y: 100 },
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 650, y: 150 }
+                ],
+                background: 'https://png.pngtree.com/thumb_back/fw800/background/20250226/pngtree-a-volcanic-eruption-at-night-with-flowing-lava-and-nearby-huts-image_16965916.jpg'
+            },
+            7: { // Sky Island
+                platforms: [
+                    { x: 50, y: 300 }, { x: 250, y: 200 }, { x: 450, y: 100 }, { x: 650, y: 200 }, 
+                    { x: 0, y: 430, width: 800, height: 20 } // Bottom collision platform
+                ],
+                monsters: [
+                    { emoji: '🦇', emojiSize: 40, type: 'flying', x: 150, y: 250 },
+                    { emoji: '🦇', emojiSize: 40, type: 'flying', x: 350, y: 50 },
+                    { emoji: '🦇', emojiSize: 40, type: 'flying', x: 550, y: 150 }
+                ],
+                background: 'https://pic.616pic.com/bg_w1180/00/17/12/DQhYR5z7yx.jpg'
+            },
+            8: { // Swamp
+                platforms: [
+                    { x: 0, y: 380 }, { x: 200, y: 380 }, { x: 400, y: 380 }, { x: 600, y: 380 }, 
+                    { x: 0, y: 430, width: 800, height: 20 } // Bottom collision platform
+                ],
+                monsters: [
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 100, y: 330 },
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 300, y: 330 },
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 500, y: 330 },
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 700, y: 330 }
+                ],
+                background: 'https://png.pngtree.com/thumb_back/fh260/background/20230609/pngtree-swamp-forest-image_2901521.jpg'
+            },
+            9: { // Crystal Cave
+                platforms: [
+                    { x: 0, y: 350 }, { x: 150, y: 250 }, { x: 300, y: 150 }, { x: 450, y: 250 }, { x: 600, y: 350 }, 
+                    { x: 0, y: 430, width: 800, height: 20 } // Bottom collision platform
+                ],
+                monsters: [
+                    { emoji: '🦇', emojiSize: 40, type: 'flying', x: 100, y: 300 },
+                    { emoji: '👹', emojiSize: 50, type: 'ground', x: 350, y: 100 },
+                    { emoji: '🦇', emojiSize: 40, type: 'flying', x: 650, y: 300 }
+                ],
+                background: 'https://png.pngtree.com/background/20250105/original/pngtree-d-elves-crystal-caves-scenery-images-in-purple-and-blue-shade-picture-image_15585752.jpg'
+            },
+            10: { // Boss Level - Volcano
+                platforms: [
+                    { x: 0, y: 380 }, { x: 600, y: 380 }, 
+                    { x: 300, y: 250 },
+                    { x: 0, y: 430, width: 800, height: 20 } // Bottom collision platform
+                ],
+                monsters: [
+                    { emoji: '🐉', emojiSize: 80, type: 'ground', isBoss: true, x: 350, y: 300, dropsSkill: 'ice_shard' } 
+                ],
+                background: 'https://png.pngtree.com/thumb_back/fh260/background/20250528/pngtree-fiery-cartoon-dragon-cave-with-glowing-lava-and-crystals-image_17351434.jpg'
+            }
+        };
+
+        // All possible quests
+        const allPossibleQuests = [
+            { id: 'levelUp1', type: 'levelUp', target: 2, reward: 5, name: '新手晉升', description: '達到等級 2' },
+            { id: 'levelUp2', type: 'levelUp', target: 5, reward: 15, name: '中級冒險者', description: '達到等級 5' },
+            { id: 'killSlimes', type: 'killMonster', target: 5, reward: 10, name: '史萊姆剋星', description: '擊敗 5 隻怪物' },
+            { id: 'killMoreMonsters', type: 'killMonster', target: 15, reward: 20, name: '怪物獵人', description: '擊敗 15 隻怪物' },
+            { id: 'gainGold', type: 'gainGold', target: 100, reward: 8, name: '財富之路', description: '獲得 100 金幣' },
+            { id: 'gainMoreGold', type: 'gainGold', target: 500, reward: 25, name: '金幣大亨', description: '獲得 500 金幣' },
+            { id: 'spendGold', type: 'spendGold', target: 50, reward: 7, name: '精打細算', description: '消費 50 金幣' },
+            { id: 'spendMoreGold', type: 'spendGold', target: 200, reward: 18, name: '購物狂人', description: '消費 200 金幣' },
+            { id: 'defeatBoss1', type: 'defeatBoss', target: 1, reward: 20, name: '首領挑戰', description: '擊敗第一位首領 (關卡10)' },
+            { id: 'defeatBoss2', type: 'defeatBoss', target: 3, reward: 50, name: '首領連戰', description: '擊敗 3 位首領' }
+        ];
+
+        // Currently active quests (initially populate with a few random quests)
+        let quests = [];
+        const maxActiveQuests = 3; // Number of quests active at one time
+
+        function populateInitialQuests() {
+            const shuffledQuests = [...allPossibleQuests].sort(() => 0.5 - Math.random());
+            quests = shuffledQuests.slice(0, maxActiveQuests).map(q => ({ ...q, current: 0, completed: false, claimed: false }));
+        }
+        
+        // Gacha Pool (includes equipment and new treasure types)
+        const gachaPool = [
+            { item: itemDatabase.find(i => i.id === 'hp_potion'), rarity: 'common', probability: 0.30 },
+            { item: itemDatabase.find(i => i.id === 'mp_potion'), rarity: 'common', probability: 0.25 },
+            { item: itemDatabase.find(i => i.id === 'basic_sword'), rarity: 'uncommon', probability: 0.15 },
+            { item: itemDatabase.find(i => i.id === 'basic_armor'), rarity: 'uncommon', probability: 0.10 },
+            { item: itemDatabase.find(i => i.id === 'iron_sword'), rarity: 'rare', probability: 0.08 },
+            { item: itemDatabase.find(i => i.id === 'iron_armor'), rarity: 'rare', probability: 0.05 },
+            new Treasure('power_gem', '力量寶石', '💎', 'treasure', 0, '永久增加攻擊力 10%', { attackPercent: 0.10 }), 
+            new Treasure('vitality_gem', '活力寶石', '💖', 'treasure', 0, '永久增加生命值 15%', { hpPercent: 0.15 }), 
+            new Equipment('legendary_sword', '傳說之劍', '✨🗡️', 'weapon', 0, '大幅增加 50 點攻擊力', { attackBonus: 50 }),
+            new Equipment('legendary_armor', '傳說護甲', '✨🛡️', 'armor', 0, '大幅增加 100 點生命值和 20 點防禦力', { hpBonus: 100, defenseBonus: 20 }),
+        ].map(item => {
+            // Assign probabilities if not already set (for direct Treasure/Equipment instances)
+            if (!item.probability) {
+                switch (item.rarity) {
+                    case 'common': item.probability = 0.20; break;
+                    case 'uncommon': item.probability = 0.10; break;
+                    case 'rare': item.probability = 0.05; break;
+                    case 'epic': item.probability = 0.02; break; 
+                    case 'legendary': item.probability = 0.01; break;
+                    default: item.probability = 0;
+                }
+            }
+            return item;
+        });
+
+        // Normalize probabilities (ensure they sum to 1)
+        const totalProbability = gachaPool.reduce((sum, item) => sum + item.probability, 0);
+        gachaPool.forEach(item => item.probability /= totalProbability);
+
+        // Endless Shop Items (purchasable with endlessScore)
+        const endlessShopItems = [
+            new Item('endless_hp_boost', '無限生命增幅', '❤️‍🔥', 'perk', 50, '永久增加最大生命值 50 點', () => {
+                player.stats.baseMaxHp += 50;
+                player.calculateEffectiveStats();
+                player.stats.currentHp = player.stats.maxHp;
+            }),
+            new Item('endless_atk_boost', '無限攻擊增幅', '⚔️🔥', 'perk', 75, '永久增加攻擊力 10 點', () => {
+                player.stats.baseAttack += 10;
+                player.calculateEffectiveStats();
+            }),
+            new Item('endless_def_boost', '無限防禦增幅', '🛡️✨', 'perk', 60, '永久增加防禦力 5 點', () => {
+                player.stats.baseDefense += 5;
+                player.calculateEffectiveStats();
+            }),
+            allSkills.find(s => s.id === 'thunder_strike'), 
+            allSkills.find(s => s.id === 'heal'), 
+            new Treasure('xp_booster', '經驗值增幅器', '🌟', 'treasure', 80, '永久增加經驗值獲取 20%', { xpGainPercent: 0.20 }),
+            new Treasure('gold_magnet', '金幣磁鐵', '🧲', 'treasure', 100, '永久增加金幣掉落 25%', { goldDropPercent: 0.25 }),
+        ];
+
+        // MODIFIED FUNCTION: Player state is no longer handled here
+        function initLevel(levelNumber) {
+            projectiles = [];
+            loots = [];
+            
+            // Player state and keyboard reset are now handled by startGameAtLevel
+
+            // Calculate which map configuration to use based on gameLevel
+            const mapIndex = (levelNumber - 1) % 10; // 0-9 index
+            const config = levelConfigurations[mapIndex + 1]; // Get the map config (1-10)
+
+            canvas.style.backgroundImage = `url('${config.background}')`;
+
+            platforms = config.platforms.map(p => {
+                const platformWidth = p.width || platformImage.width;
+                const platformHeight = p.height || platformImage.height; 
+                return new Platform({ 
+                    x: p.x, 
+                    y: p.y, 
+                    image: platformImage, 
+                    width: platformWidth, 
+                    height: platformHeight 
+                });
+            });
+
+            monsters = [];
+            if (gameMode === 'normal') {
+                config.monsters.forEach(mConfig => {
+                    const isBoss = mConfig.isBoss || false;
+                    const isElite = mConfig.isElite || false;
+                    // Scale HP, Attack, XP, Money based on actual gameLevel, not just mapIndex
+                    const difficultyMultiplier = 1 + (levelNumber - 1) * 0.1; 
+
+                    let baseHp = (isBoss ? 200 : (isElite ? 100 : 50)) * difficultyMultiplier;
+                    let baseAttack = (isBoss ? 15 : (isElite ? 10 : 5)) * difficultyMultiplier;
+                    let baseXp = (isBoss ? 100 : (isElite ? 50 : 20)) * difficultyMultiplier;
+                    let baseMoney = (isBoss ? 50 : (isElite ? 25 : 10)) * difficultyMultiplier;
+
+                    // If it's a level ending in 5, ensure an elite monster is present
+                    if (levelNumber % 5 === 0 && !isBoss && !isElite && monsters.filter(m => m.isElite).length === 0) {
+                        // Replace one regular monster with an elite one if not already an elite level
+                        // Or simply add an elite monster if the config doesn't already have one
+                        monsters.push(
+                            new Monster({
+                                position: { x: 400, y: 300 }, // Central elite spawn
+                                emoji: '😈', emojiSize: 60, type: 'ground', isElite: true,
+                                stats: { currentHp: Math.round(100 * difficultyMultiplier * 1.5), maxHp: Math.round(100 * difficultyMultiplier * 1.5), attack: Math.round(10 * difficultyMultiplier * 1.5), moneyDrop: Math.round(25 * difficultyMultiplier * 1.5), xpDrop: Math.round(50 * difficultyMultiplier * 1.5) },
+                                dropsSkill: null
+                            })
+                        );
+                    } else {
+                        monsters.push(
+                            new Monster({
+                                position: { x: mConfig.x, y: mConfig.y },
+                                emoji: mConfig.emoji, 
+                                emojiSize: mConfig.emojiSize, 
+                                stats: { currentHp: Math.round(baseHp), maxHp: Math.round(baseHp), attack: Math.round(baseAttack), moneyDrop: Math.round(baseMoney), xpDrop: Math.round(baseXp) },
+                                type: mConfig.type,
+                                isBoss: isBoss,
+                                isElite: isElite, // Set isElite flag
+                                dropsSkill: mConfig.dropsSkill || null
+                            })
+                        );
+                    }
+                });
+            } 
+
+            showMessage(`進入關卡 ${gameLevel}！`, 2000);
+            updateUI();
+        }
+
+        function createDamageText(amount, x, y) {
+            damageTexts.push({ text: amount, x, y, vy: -3, opacity: 1, life: 60 });
+        }
+
+        function handleDamageTexts() {
+            for (let i = damageTexts.length - 1; i >= 0; i--) {
+                const dt = damageTexts[i];
+                dt.y += dt.vy;
+                dt.life--;
+                dt.opacity = dt.life / 60;
+                ctx.save();
+                ctx.globalAlpha = dt.opacity;
+                ctx.fillStyle = '#fcd34d';
+                ctx.font = 'bold 20px Arial';
+                ctx.fillText(dt.text, dt.x, dt.y);
+                ctx.restore();
+                if (dt.life <= 0) damageTexts.splice(i, 1);
+            }
+        }
+
+        function spawnEndlessMonster() {
+            const difficultyScale = 1 + endlessSurvivalTimer / 30; // Scale difficulty every 30 seconds
+            const isFlying = Math.random() < 0.3; // 30% chance for flying monster
+            const isEliteSpawn = Math.random() < (endlessSurvivalTimer / 600); // Chance increases with time, e.g., 10% at 60s, 20% at 120s
+            
+            let emoji, emojiSize, monsterType, baseHp, baseAttack, baseXp, baseMoney, isEliteMonster = false;
+
+            if (isEliteSpawn && !isBossActive) { // Spawn elite if conditions met and no boss
+                emoji = '😈';
+                emojiSize = 60;
+                monsterType = Math.random() < 0.5 ? 'ground' : 'flying'; // Elite can be ground or flying
+                baseHp = 100 * difficultyScale * 1.5;
+                baseAttack = 10 * difficultyScale * 1.5;
+                baseXp = 50 * difficultyScale * 1.5;
+                baseMoney = 25 * difficultyScale * 1.5;
+                isEliteMonster = true;
+            } else { // Regular monster
+                emoji = isFlying ? '🦇' : '👹';
+                emojiSize = isFlying ? 40 : 50;
+                monsterType = isFlying ? 'flying' : 'ground';
+                baseHp = (isFlying ? 40 : 60) * difficultyScale;
+                baseAttack = (isFlying ? 8 : 12) * difficultyScale;
+                baseXp = (isFlying ? 15 : 25) * difficultyScale;
+                baseMoney = (isFlying ? 8 : 12) * difficultyScale;
+            }
+
+            // Random spawn position (top half of the screen for flying, bottom for ground)
+            const spawnX = Math.random() * (canvas.width - 50);
+            const spawnY = (monsterType === 'flying') ? Math.random() * (canvas.height / 2 - 50) : canvas.height / 2 + Math.random() * (canvas.height / 2 - 50);
+
+            monsters.push(
+                new Monster({
+                    position: { x: spawnX, y: spawnY },
+                    emoji: emoji,
+                    emojiSize: emojiSize,
+                    stats: { currentHp: Math.round(baseHp), maxHp: Math.round(baseHp), attack: Math.round(baseAttack), moneyDrop: Math.round(baseMoney), xpDrop: Math.round(baseXp) },
+                    type: monsterType,
+                    isBoss: false,
+                    isElite: isEliteMonster,
+                    dropsSkill: null
+                })
+            );
+        }
+
+        function spawnEndlessBoss() {
+            const difficultyScale = 1 + endlessSurvivalTimer / 60; // Boss difficulty scales with time
+            const baseHp = 500 * difficultyScale;
+            const baseAttack = 30 * difficultyScale;
+            const baseXp = 200 * difficultyScale;
+            const baseMoney = 100 * difficultyScale;
+
+            isBossActive = true; // Set boss active flag
+            monsters = []; // Clear all regular monsters
+            showMessage("無盡模式 Boss 出現！", 2500);
+
+            monsters.push(
+                new Monster({
+                    position: { x: canvas.width / 2 - 40, y: canvas.height / 2 - 40 }, // Center spawn
+                    emoji: '👾', emojiSize: 80, type: 'ground', isBoss: true,
+                    stats: { currentHp: Math.round(baseHp), maxHp: Math.round(baseHp), attack: Math.round(baseAttack), moneyDrop: Math.round(baseMoney), xpDrop: Math.round(baseXp) },
+                    dropsSkill: null
+                })
+            );
+        }
+
+
+        let animationFrameId;
+        function animate(currentTime) {
+            if (!lastTime) lastTime = currentTime;
+            const deltaTime = currentTime - lastTime; // Milliseconds
+            lastTime = currentTime;
+
+            animationFrameId = requestAnimationFrame(animate);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            platforms.forEach(platform => platform.draw());
+            
+            loots.forEach((loot, index) => {
+                loot.update();
+                if (player.position.x < loot.position.x + loot.width &&
+                    player.position.x + player.width > loot.position.x &&
+                    player.position.y < loot.position.y + loot.height &&
+                    player.position.y + player.height > loot.position.y) {
+                    player.addMoney(loot.value); 
+                    loots.splice(index, 1);
+                    updateUI();
+                }
+            });
+
+            player.update();
+
+            // Draw sword swing attack effect (filled arc)
+            if (player.isAttacking) {
+                ctx.save();
+                ctx.globalAlpha = 0.3; // Slightly more transparent
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                const centerX = player.position.x + player.width / 2;
+                const centerY = player.position.y + player.height / 2;
+                const swingRadius = 60;
+                let startAngle, endAngle;
+
+                if (player.facing === 'right') {
+                    startAngle = Math.PI * 0.75; 
+                    endAngle = Math.PI * 0.25; 
+                    ctx.arc(centerX, centerY, swingRadius, startAngle, endAngle, false); // Counter-clockwise for right swing
+                } else {
+                    startAngle = Math.PI * 0.25; 
+                    endAngle = Math.PI * 0.75; 
+                    ctx.arc(centerX, centerY, swingRadius, startAngle, endAngle, true); // Clockwise for left swing
+                }
+                ctx.lineTo(centerX, centerY); // Close the arc to form a filled shape
+                ctx.closePath();
+                ctx.fill();
+                ctx.restore();
+            }
+            
+            platforms.forEach(platform => {
+                // Check if player is falling and will land on platform
+                if (player.velocity.y > 0 && 
+                    player.position.y + player.height <= platform.position.y && 
+                    player.position.y + player.height + player.velocity.y >= platform.position.y && 
+                    player.position.x + player.width > platform.position.x && 
+                    player.position.x < platform.position.x + platform.width) {
+                    
+                    player.velocity.y = 0; 
+                    player.position.y = platform.position.y - player.height; 
+                }
+            });
+
+            monsters = monsters.filter(monster => monster.isAlive);
+
+            monsters.forEach((monster) => {
+                monster.update();
+                
+                // Player melee attack collision check (only if player is attacking)
+                if (player.isAttacking &&
+                    player.attackBox.position.x < monster.position.x + monster.width &&
+                    player.attackBox.position.x + player.attackBox.width > monster.position.x &&
+                    player.attackBox.position.y < monster.position.y + monster.height &&
+                    player.attackBox.position.y + player.attackBox.height > monster.position.y) {
+                    
+                    monster.takeDamage(player.stats.attack);
+                }
+            });
+            player.isAttacking = false; // Reset player attack state for the next frame
+
+            projectiles.forEach((projectile, projIndex) => {
+                projectile.update();
+                if (projectile.position.x < 0 || projectile.position.x > canvas.width) {
+                    setTimeout(() => projectiles.splice(projIndex, 1), 0);
+                }
+                monsters.forEach((monster) => {
+                    if (monster.isAlive &&
+                        projectile.position.x > monster.position.x &&
+                        projectile.position.x < monster.position.x + monster.width &&
+                        projectile.position.y > monster.position.y &&
+                        projectile.position.y < monster.position.y + monster.height) {
+                        monster.takeDamage(projectile.damage);
+                        setTimeout(() => projectiles.splice(projIndex, 1), 0);
+                    }
+                });
+            });
+
+            handleDamageTexts();
+            
+            if (gameMode === 'normal') {
+                // Check for level clear only if not already transitioning
+                if (monsters.length === 0 && player.stats.currentHp > 0 && !levelTransitionActive) {
+                    gameLevel++; 
+                    levelClear();
+                }
+            } else if (gameMode === 'endless') {
+                endlessSurvivalTimer += deltaTime / 1000; // Convert to seconds
+                endlessScore = Math.floor(endlessSurvivalTimer); // 1 point per second
+                endlessSurvivalTimeText.innerText = Math.floor(endlessSurvivalTimer);
+                endlessScoreText.innerText = endlessScore;
+
+                // Boss spawning logic
+                if (!isBossActive) {
+                    endlessBossSpawnTimer += deltaTime;
+                    if (endlessBossSpawnTimer >= endlessBossSpawnInterval) {
+                        spawnEndlessBoss();
+                        endlessBossSpawnTimer = 0; // Reset timer for next boss
+                    }
+                }
+
+                // Regular monster spawning logic (only if no boss is active)
+                if (!isBossActive && monsters.length < (3 + Math.floor(endlessSurvivalTimer / 20))) { // Max monsters increases over time
+                    monsterSpawnTimer += deltaTime;
+                    if (monsterSpawnTimer >= monsterSpawnInterval) {
+                        spawnEndlessMonster();
+                        monsterSpawnTimer = 0;
+                        monsterSpawnInterval = Math.max(500, monsterSpawnInterval - 5); // Min interval 0.5s
+                    }
+                }
+            }
+        }
+
+        function updateUI() {
+            document.getElementById('hp-text').innerText = `${player.stats.currentHp}/${player.stats.maxHp}`;
+            document.getElementById('health-bar').style.width = `${(player.stats.currentHp / player.stats.maxHp) * 100}%`;
+            document.getElementById('mp-text').innerText = `${player.stats.currentMp}/${player.stats.maxMp}`;
+            document.getElementById('mana-bar').style.width = `${(player.stats.currentMp / player.stats.maxMp) * 100}%`;
+            document.getElementById('money-text').innerText = player.stats.money;
+            document.getElementById('diamond-text').innerText = player.stats.diamonds; // Update diamonds display
+            document.getElementById('level-text').innerText = player.stats.level;
+            document.getElementById('xp-text').innerText = `${player.stats.xp}/${player.stats.xpToNextLevel}`;
+            document.getElementById('xp-bar').style.width = `${(player.stats.xp / player.stats.xpToNextLevel) * 100}%`;
+
+            // Toggle visibility of normal mode vs endless mode UI elements
+            if (gameMode === 'normal') {
+                endlessShopBtn.classList.add('hidden');
+                endlessScoreDisplay.classList.add('hidden');
+            } else { // endless mode
+                endlessShopBtn.classList.remove('hidden');
+                endlessScoreDisplay.classList.remove('hidden');
+                currentEndlessScoreText.innerText = endlessScore; // Update score in endless shop
+            }
+
+            const itemHotkeyBar = document.getElementById('item-hotkey-bar');
+            itemHotkeyBar.innerHTML = '';
+            for (let i = 0; i < 3; i++) { 
+                const slot = playerItemHotkeys[i];
+                const slotEl = document.createElement('div');
+                slotEl.className = 'hotkey-slot';
+                let quantityText = '';
+                if (slot) {
+                    if (slot.quantity !== Infinity) {
+                        quantityText = `<span class="quantity">${slot.quantity}</span>`;
+                    }
+                }
+                slotEl.innerHTML = `
+                    <span class="key">${i + 1}</span>
+                    ${slot ? `<span class="emoji">${slot.item.emoji}</span>` : ''}
+                    ${quantityText}
+                `;
+                itemHotkeyBar.appendChild(slotEl);
+            }
+
+            const skillHotkeyBar = document.getElementById('skill-hotkey-bar');
+            skillHotkeyBar.innerHTML = '';
+            for (let i = 0; i < 4; i++) { 
+                const slot = playerSkillHotkeys[i];
+                const slotEl = document.createElement('div');
+                slotEl.className = 'hotkey-slot';
+                let quantityText = '';
+                if (slot) {
+                    if (slot.quantity !== Infinity) {
+                        quantityText = `<span class="quantity">${slot.quantity}</span>`;
+                    }
+                }
+                slotEl.innerHTML = `
+                    <span class="key">${i + 4}</span>
+                    ${slot ? `<span class="emoji">${slot.skill.emoji}</span>` : ''}
+                    ${quantityText}
+                `;
+                skillHotkeyBar.appendChild(slotEl);
+            }
+
+            updatePlayerInfoModal();
+            renderQuests(); // Update quests display
+        }
+        
+        function useHotkeyItem(index) {
+            const slot = playerItemHotkeys[index];
+            if (!slot) return;
+            
+            if (slot.quantity > 0) {
+                slot.item.effect();
+                if (slot.quantity !== Infinity) {
+                    slot.quantity--;
+                }
+                if (slot.quantity <= 0) {
+                    playerItemHotkeys[index] = null;
+                }
+                updateUI();
+            }
+        }
+
+        function useHotkeySkill(index) {
+            const slot = playerSkillHotkeys[index];
+            if (!slot || !slot.skill.effect) return;
+            
+            const existingSkill = playerSkills.find(s => s.id === slot.skill.id);
+            if (!existingSkill) {
+                showMessage("未學習此技能!", 1000);
+                return;
+            }
+
+            slot.skill.effect();
+            updateUI();
+        }
+        
+        function showMessage(msg, duration = 2000) {
+            gameMessageEl.innerText = msg;
+            gameMessageEl.style.display = 'block';
+            setTimeout(() => {
+                gameMessageEl.style.display = 'none';
+            }, duration);
+        }
+
+        function gameOver() {
+            cancelAnimationFrame(animationFrameId);
+            showMessage("遊戲結束");
+            
+            if (gameMode === 'normal') {
+                gameLevel = 1; 
+            } else if (gameMode === 'endless') {
+                showMessage(`遊戲結束！你獲得了 ${endlessScore} 積分！`, 4000);
+                endlessScore = 0; 
+                endlessSurvivalTimer = 0;
+                monsterSpawnTimer = 0;
+                monsterSpawnInterval = 2000; 
+                isBossActive = false; // Reset boss flag
+            }
+
+            keys.a.pressed = false;
+            keys.d.pressed = false;
+            keys.w.pressed = false;
+            levelTransitionActive = true; 
+
+            setTimeout(() => {
+                backToHome(); // Go back to home screen after game over
+                levelTransitionActive = false; 
+            }, gameMode === 'endless' ? 5000 : 3000); 
+        }
+
+        function levelClear() {
+            levelTransitionActive = true; 
+            showMessage(`關卡 ${gameLevel-1} 完成！準備進入關卡 ${gameLevel}...`, 3000);
+            setTimeout(() => {
+                initLevel(gameLevel); 
+                levelTransitionActive = false; 
+            }, 3000);
+        }
+
+        function openShopModal() {
+            playButtonClickSound();
+            shopModal.style.display = 'flex';
+            renderShopItems();
+        }
+
+        function closeShopModal() {
+            playButtonClickSound();
+            shopModal.style.display = 'none';
+        }
+
+        function renderShopItems() {
+            const shopItemList = document.getElementById('shop-item-list');
+            shopItemList.innerHTML = '';
+            itemDatabase.forEach(item => {
+                if (item.type !== 'skill' && item.type !== 'treasure' && item.price > 0) {
+                    const itemCard = document.createElement('div');
+                    itemCard.className = 'modal-item-card';
+                    itemCard.innerHTML = `
+                        <span class="text-4xl">${item.emoji}</span>
+                        <p class="font-bold">${item.name}</p>
+                        <p class="text-sm text-gray-400">${item.description}</p>
+                        <p>價格: ${item.price} 🪙</p>
+                        <button onclick="buyItem('${item.id}')">購買</button>
+                    `;
+                    shopItemList.appendChild(itemCard);
+                }
+            });
+        }
+
+        function buyItem(itemId) {
+            const item = itemDatabase.find(i => i.id === itemId);
+            if (item && player.stats.money >= item.price) {
+                playButtonClickSound(); 
+                player.spendMoney(item.price); 
+                player.addItem(item);
+                showMessage(`購買了 ${item.name}！`, 1000);
+                updateUI();
+                renderShopItems(); 
+            } else if (item) {
+                showMessage("金幣不足！", 1000);
+            }
+        }
+
+        function openPlayerInfoModal() {
+            playButtonClickSound();
+            playerInfoModal.style.display = 'flex';
+            updatePlayerInfoModal();
+        }
+
+        function closePlayerInfoModal() {
+            playButtonClickSound();
+            playerInfoModal.style.display = 'none';
+        }
+
+        function updatePlayerInfoModal() {
+            document.getElementById('info-level').innerText = player.stats.level;
+            document.getElementById('info-hp').innerText = `${player.stats.currentHp}/${player.stats.maxHp}`;
+            document.getElementById('info-mp').innerText = `${player.stats.currentMp}/${player.stats.maxMp}`;
+            document.getElementById('info-attack').innerText = player.stats.attack;
+            document.getElementById('info-defense').innerText = player.stats.defense; 
+            document.getElementById('info-money').innerText = player.stats.money;
+            document.getElementById('info-diamond').innerText = player.stats.diamonds;
+
+            document.getElementById('info-weapon').innerHTML = player.equipment.weapon ? `${player.equipment.weapon.name} <button class="text-sm text-blue-400" onclick="player.unequipItem('weapon')">卸下</button>` : '無';
+            document.getElementById('info-armor').innerHTML = player.equipment.armor ? `${player.equipment.armor.name} <button class="text-sm text-blue-400" onclick="player.unequipItem('armor')">卸下</button>` : '無';
+
+            const infoTreasuresList = document.getElementById('info-treasures');
+            infoTreasuresList.innerHTML = '';
+            if (player.treasures.length > 0) {
+                player.treasures.forEach(treasure => {
+                    const treasureEl = document.createElement('p');
+                    treasureEl.innerHTML = `${treasure.emoji} ${treasure.name}: ${treasure.description}`;
+                    infoTreasuresList.appendChild(treasureEl);
+                });
+            } else {
+                infoTreasuresList.innerHTML = '<p>無</p>';
+            }
+
+
+            const inventoryList = document.getElementById('inventory-list');
+            inventoryList.innerHTML = '';
+            player.inventory.forEach(invItem => {
+                const itemCard = document.createElement('div');
+                itemCard.className = 'modal-item-card';
+                let actionButton = '';
+                if (invItem.item.type === 'potion') {
+                    actionButton = `<button onclick="player.removeItem('${invItem.item.id}'); playButtonClickSound();">丟棄</button>`;
+                    const hotkeyIndex = playerItemHotkeys.findIndex(slot => slot && slot.item.id === invItem.item.id);
+                    if (hotkeyIndex !== -1) {
+                         actionButton += `<button onclick="useHotkeyItem(${hotkeyIndex}); playButtonClickSound();">使用</button>`;
+                    } else {
+                        const emptyItemHotkeyIndex = playerItemHotkeys.findIndex(slot => slot === null);
+                        if (emptyItemHotkeyIndex !== -1) {
+                            actionButton += `<button onclick="placeItemInHotkey('${invItem.item.id}', ${emptyItemHotkeyIndex}); playButtonClickSound();">放置</button>`;
+                        }
+                    }
+                } else if (invItem.item.type === 'weapon' || invItem.item.type === 'armor') {
+                    actionButton = `<button onclick="player.equipItem(itemDatabase.find(i => i.id === '${invItem.item.id}')); playButtonClickSound();">裝備</button>`;
+                }
+                itemCard.innerHTML = `
+                    <span class="text-4xl">${invItem.item.emoji}</span>
+                    <p class="font-bold">${invItem.item.name}</p>
+                    <p>數量: ${invItem.quantity}</p>
+                    ${actionButton}
+                `;
+                inventoryList.appendChild(itemCard);
+            });
+
+            const skillList = document.getElementById('skill-list');
+            skillList.innerHTML = '';
+            playerSkills.forEach(skill => {
+                const skillCard = document.createElement('div');
+                skillCard.className = 'modal-item-card';
+                let actionButton = '';
+                const hotkeyIndex = playerSkillHotkeys.findIndex(slot => slot && slot.skill.id === skill.id);
+                if (hotkeyIndex !== -1) {
+                    actionButton = `<button onclick="useHotkeySkill(${hotkeyIndex}); playButtonClickSound();">施放</button>`;
+                } else {
+                    const emptySkillHotkeyIndex = playerSkillHotkeys.findIndex(slot => slot === null);
+                    if (emptySkillHotkeyIndex !== -1) {
+                        actionButton += `<button onclick="placeSkillInHotkey('${skill.id}', ${emptySkillHotkeyIndex}); playButtonClickSound();">放置</button>`;
+                    }
+                }
+
+                skillCard.innerHTML = `
+                    <span class="text-4xl">${skill.emoji}</span>
+                    <p class="font-bold">${skill.name}</p>
+                    <p>等級: ${skill.level}</p>
+                    <p>係數: ${skill.coefficient.toFixed(1)}</p>
+                    ${actionButton}
+                `;
+                skillList.appendChild(skillCard);
+            });
+        }
+
+        function placeItemInHotkey(itemId, hotkeyIndex) {
+            const invItem = player.inventory.find(i => i.item.id === itemId);
+            if (invItem) {
+                playerItemHotkeys[hotkeyIndex] = { item: invItem.item, quantity: invItem.quantity };
+                updateUI();
+                updatePlayerInfoModal(); 
+            }
+        }
+
+        function placeSkillInHotkey(skillId, hotkeyIndex) {
+            const skill = playerSkills.find(s => s.id === skillId);
+            if (skill) {
+                playerSkillHotkeys[hotkeyIndex] = { skill: skill, quantity: Infinity };
+                updateUI();
+                updatePlayerInfoModal(); 
+            }
+        }
+
+        function openLevelSelectModal() {
+            playButtonClickSound();
+            levelSelectModal.style.display = 'flex';
+            renderLevelSelectButtons();
+        }
+
+        function closeLevelSelectModal() {
+            playButtonClickSound();
+            levelSelectModal.style.display = 'none';
+        }
+
+        function renderLevelSelectButtons() {
+            const levelListDiv = document.getElementById('level-list');
+            levelListDiv.innerHTML = '';
+            const maxSelectableLevel = 100; 
+
+            for (let levelNum = 1; levelNum <= maxSelectableLevel; levelNum++) {
+                const levelButton = document.createElement('button');
+                levelButton.innerText = `關卡 ${levelNum}`;
+                levelButton.onclick = () => {
+                    playButtonClickSound(); 
+                    startGameAtLevel(levelNum, 'normal'); 
+                    closeLevelSelectModal();
+                };
+                levelListDiv.appendChild(levelButton);
+            }
+        }
+
+        // MODIFIED FUNCTION: Centralized player creation and state reset
+        function startGameAtLevel(levelNum, mode) {
+            if (Tone.context.state !== 'running') {
+                Tone.start();
+            }
+            cancelAnimationFrame(animationFrameId);
+
+            gameMode = mode;
+            startScreen.style.display = 'none';
+            gameTitle.classList.remove('hidden');
+            gameContainer.classList.remove('hidden');
+            gameUiContainer.classList.remove('hidden');
+
+            // [FIX 1] Player Persistence: Create player only if it doesn't exist.
+            // Otherwise, reset position and heal for the new mode/level.
+            if (!player) {
+                player = new Player();
+            } else {
+                player.position = { x: 100, y: 100 };
+                player.velocity = { x: 0, y: 0 };
+                player.stats.currentHp = player.stats.maxHp;
+                player.stats.currentMp = player.stats.maxMp;
+            }
+            
+            // Reset keyboard state for a clean start
+            keys.a.pressed = false;
+            keys.d.pressed = false;
+            keys.w.pressed = false;
+
+            if (gameMode === 'normal') {
+                gameLevel = levelNum;
+                // initLevel now only sets up the level environment
+                initLevel(gameLevel);
+            } else if (gameMode === 'endless') {
+                // [FIX 2] Reset endless mode state
+                endlessScore = 0;
+                endlessSurvivalTimer = 0;
+                monsterSpawnTimer = 0;
+                monsterSpawnInterval = 2000;
+                isBossActive = false;
+                endlessBossSpawnTimer = 0;
+                monsters = [];
+                projectiles = [];
+                loots = [];
+
+                // [FIX 2] Correctly initialize the platform for endless mode
+                platforms = [
+                    new Platform({ x: 0, y: 430, width: 800, height: 20, image: platformImage })
+                ];
+                canvas.style.backgroundImage = `url('https://cdnb.artstation.com/p/assets/images/images/002/283/973/large/meng-ren-1408978584.jpg?1459762983')`;
+                
+                spawnEndlessMonster(); // Spawn initial monster
+            }
+
+            lastTime = performance.now();
+            animate(lastTime);
+            updateUI();
+        }
+
+        function backToHome() {
+            playButtonClickSound();
+            cancelAnimationFrame(animationFrameId);
+            startScreen.style.display = 'flex';
+            gameTitle.classList.add('hidden');
+            gameContainer.classList.add('hidden');
+            gameUiContainer.classList.add('hidden');
+            // Reset player and game state for a clean start next time
+            // NOTE: According to user request, we keep the player object.
+            // If a full reset is desired, we would re-assign `player = new Player()` here.
+            monsters = [];
+            projectiles = [];
+            loots = [];
+            gameLevel = 1;
+            endlessScore = 0;
+            endlessSurvivalTimer = 0;
+            monsterSpawnTimer = 0;
+            monsterSpawnInterval = 2000;
+            isBossActive = false;
+            keys.a.pressed = false;
+            keys.d.pressed = false;
+            keys.w.pressed = false;
+            if(player) { // Only update UI if player exists
+               updateUI();
+            }
+            populateInitialQuests(); // Re-populate quests
+        }
+
+        // Quest System Functions
+        function openQuestModal() {
+            playButtonClickSound();
+            questModal.style.display = 'flex';
+            renderQuests();
+        }
+
+        function closeQuestModal() {
+            playButtonClickSound();
+            questModal.style.display = 'none';
+        }
+
+        function updateQuestProgress(type, amount) {
+            quests.forEach(quest => {
+                if (quest.type === type && !quest.completed) {
+                    quest.current += amount;
+                    if (quest.current >= quest.target) {
+                        quest.current = quest.target; 
+                        quest.completed = true;
+                        showMessage(`任務完成: ${quest.name}！`, 2500);
+                    }
+                }
+            });
+            renderQuests(); 
+        }
+
+        function renderQuests() {
+            const questListDiv = document.getElementById('quest-list');
+            questListDiv.innerHTML = '';
+            quests.forEach(quest => {
+                const progressPercentage = (quest.current / quest.target) * 100;
+                const questCard = document.createElement('div');
+                questCard.className = 'quest-card';
+                questCard.innerHTML = `
+                    <h3 class="font-bold text-lg">${quest.name}</h3>
+                    <p class="text-sm text-gray-300">${quest.description}</p>
+                    <p class="text-sm">進度: ${quest.current}/${quest.target}</p>
+                    <div class="quest-progress-bar">
+                        <div class="quest-progress-fill" style="width: ${progressPercentage}%;"></div>
+                    </div>
+                    <p class="text-sm mt-1">獎勵: ${quest.reward} 鑽石 💎</p>
+                    <button 
+                        onclick="claimQuest('${quest.id}')" 
+                        ${!quest.completed || quest.claimed ? 'disabled' : ''}>
+                        ${quest.claimed ? '已領取' : '領取獎勵'}
+                    </button>
+                `;
+                questListDiv.appendChild(questCard);
+            });
+        }
+
+        function claimQuest(questId) {
+            const quest = quests.find(q => q.id === questId);
+            if (quest && quest.completed && !quest.claimed) {
+                playButtonClickSound();
+                player.addDiamonds(quest.reward);
+                quest.claimed = true;
+                showMessage(`領取了 ${quest.reward} 鑽石！`, 1500);
+                updateUI();
+                renderQuests(); 
+            }
+        }
+
+        function refreshQuests() {
+            const refreshCost = 5;
+            if (player.stats.diamonds < refreshCost) {
+                showMessage("鑽石不足，無法刷新任務！", 1500);
+                return;
+            }
+
+            playButtonClickSound();
+            player.stats.diamonds -= refreshCost;
+            
+            const availableQuests = allPossibleQuests.filter(aq => 
+                !quests.some(q => q.id === aq.id && q.claimed) 
+            );
+
+            const shuffledAvailableQuests = [...availableQuests].sort(() => 0.5 - Math.random());
+            quests = shuffledAvailableQuests.slice(0, maxActiveQuests).map(q => ({ ...q, current: 0, completed: false, claimed: false }));
+            
+            showMessage(`任務已刷新！`, 1500);
+            updateUI();
+            renderQuests();
+        }
+
+        // Gacha System Functions
+        function openGachaModal() {
+            playButtonClickSound();
+            gachaModal.style.display = 'flex';
+            gachaResultEl.classList.add('hidden'); 
+        }
+
+        function closeGachaModal() {
+            playButtonClickSound();
+            gachaModal.style.display = 'none';
+        }
+
+        function drawGacha() {
+            const cost = 10;
+            if (player.stats.diamonds < cost) {
+                showMessage("鑽石不足！", 1500);
+                return;
+            }
+
+            playButtonClickSound();
+            player.stats.diamonds -= cost;
+            updateUI();
+
+            let random = Math.random();
+            let chosenItem = null;
+            let cumulativeProbability = 0;
+
+            for (const poolItem of gachaPool) {
+                cumulativeProbability += poolItem.probability;
+                if (random <= cumulativeProbability) {
+                    chosenItem = poolItem.item;
+                    break;
+                }
+            }
+
+            if (chosenItem) {
+                if (chosenItem.type === 'treasure') {
+                    const existingTreasure = player.treasures.find(t => t.id === chosenItem.id);
+                    if (existingTreasure) {
+                        player.addDiamonds(chosenItem.price > 0 ? chosenItem.price / 2 : 5); 
+                        showMessage(`已擁有 ${chosenItem.name}，轉換為 鑽石！`, 2500);
+                    } else {
+                        player.treasures.push(chosenItem);
+                        player.calculateEffectiveStats(); 
+                        showMessage(`恭喜獲得寶物: ${chosenItem.name}！`, 2500);
+                    }
+                } else {
+                    player.addItem(chosenItem);
+                    showMessage(`恭喜獲得: ${chosenItem.name}！`, 2500);
+                }
+                gachaResultEmojiEl.innerText = chosenItem.emoji;
+                gachaResultNameEl.innerText = chosenItem.name;
+                gachaResultDescriptionEl.innerText = chosenItem.description;
+                gachaResultEl.classList.remove('hidden');
+            } else {
+                gachaResultEmojiEl.innerText = '❓';
+                gachaResultNameEl.innerText = '未知的物品';
+                gachaResultDescriptionEl.innerText = '你抽到了一個神秘的空箱子...';
+                gachaResultEl.classList.remove('hidden');
+            }
+            updateUI();
+        }
+
+        // Endless Shop Functions
+        function openEndlessShopModal() {
+            playButtonClickSound();
+            endlessShopModal.style.display = 'flex';
+            renderEndlessShopItems();
+        }
+
+        function closeEndlessShopModal() {
+            playButtonClickSound();
+            endlessShopModal.style.display = 'none';
+        }
+
+        function renderEndlessShopItems() {
+            const endlessShopItemList = document.getElementById('endless-shop-item-list');
+            endlessShopItemList.innerHTML = '';
+            currentEndlessScoreText.innerText = endlessScore; 
+
+            endlessShopItems.forEach(item => {
+                const itemCard = document.createElement('div');
+                itemCard.className = 'modal-item-card';
+                let buttonText = '購買';
+                let isDisabled = false;
+
+                if (item.type === 'skill' && playerSkills.some(s => s.id === item.id)) {
+                    buttonText = '已學習';
+                    isDisabled = true;
+                }
+                if (item.type === 'treasure' && player.treasures.some(t => t.id === item.id)) {
+                    buttonText = '已擁有';
+                    isDisabled = true;
+                }
+                
+                itemCard.innerHTML = `
+                    <span class="text-4xl">${item.emoji}</span>
+                    <p class="font-bold">${item.name}</p>
+                    <p class="text-sm text-gray-400">${item.description}</p>
+                    <p>價格: ${item.price} 🌟</p>
+                    <button onclick="buyEndlessItem('${item.id}')" ${isDisabled ? 'disabled' : ''}>${buttonText}</button>
+                `;
+                endlessShopItemList.appendChild(itemCard);
+            });
+        }
+
+        function buyEndlessItem(itemId) {
+            const item = endlessShopItems.find(i => i.id === itemId);
+            if (!item) return;
+
+            if (item.type === 'skill' && playerSkills.some(s => s.id === item.id)) {
+                showMessage("你已經學習了這個技能！", 1000);
+                return;
+            }
+            if (item.type === 'treasure' && player.treasures.some(t => t.id === item.id)) {
+                showMessage("你已經擁有這個寶物了！", 1000);
+                return;
+            }
+
+            if (player.spendEndlessScore(item.price)) {
+                playButtonClickSound();
+                if (item.type === 'perk') {
+                    item.effect(); 
+                    showMessage(`購買了 ${item.name}！效果已生效。`, 1500);
+                } else if (item.type === 'skill') {
+                    playerSkills.push(item); 
+                    const emptySlotIndex = playerSkillHotkeys.findIndex(slot => slot === null);
+                    if (emptySlotIndex !== -1) {
+                        playerSkillHotkeys[emptySlotIndex] = { skill: item, quantity: Infinity };
+                    }
+                    showMessage(`學習了新技能: ${item.name}！`, 1500);
+                } else if (item.type === 'treasure') {
+                    player.treasures.push(item);
+                    player.calculateEffectiveStats(); 
+                    showMessage(`獲得了寶物: ${item.name}！`, 1500);
+                }
+                updateUI();
+                renderEndlessShopItems(); 
+            } else {
+                showMessage("積分不足！", 1000);
+            }
+        }
+
+
+        // Initial setup: Start screen
+        window.addEventListener('load', async () => {
+            initAudio(); 
+            const imagesLoaded = await preloadImages();
+            if (imagesLoaded) {
+                populateInitialQuests(); 
+
+                startNormalGameBtn.addEventListener('click', () => {
+                    playButtonClickSound(); 
+                    startGameAtLevel(1, 'normal'); 
+                });
+
+                selectLevelBtnHome.addEventListener('click', openLevelSelectModal); // Moved to home screen
+
+                startEndlessBtn.addEventListener('click', () => {
+                    playButtonClickSound();
+                    startGameAtLevel(1, 'endless'); 
+                });
+
+                backToHomeBtn.addEventListener('click', backToHome); // New back to home button
+
+                shopBtn.addEventListener('click', openShopModal);
+                playerInfoBtn.addEventListener('click', openPlayerInfoModal);
+                questBtn.addEventListener('click', openQuestModal);
+                gachaBtn.addEventListener('click', openGachaModal);
+                drawGachaBtn.addEventListener('click', drawGacha);
+                refreshQuestsBtn.addEventListener('click', refreshQuests); 
+                endlessShopBtn.addEventListener('click', openEndlessShopModal); 
+
+
+                window.addEventListener('keydown', (event) => {
+                    if (shopModal.style.display === 'flex' || playerInfoModal.style.display === 'flex' || levelSelectModal.style.display === 'flex' || questModal.style.display === 'flex' || gachaModal.style.display === 'flex' || endlessShopModal.style.display === 'flex') {
+                        return; 
+                    }
+                    switch (event.key.toLowerCase()) {
+                        case 'd': case 'arrowright': keys.d.pressed = true; break;
+                        case 'a': case 'arrowleft': keys.a.pressed = true; break;
+                        case 'w': case 'arrowup': case ' ': if (player.velocity.y === 0) player.velocity.y = player.jumpPower; break;
+                        case 'j': player.attack(); break; 
+                        case 'k': player.rangedAttack(); break; 
+                        case '1': useHotkeyItem(0); break;
+                        case '2': useHotkeyItem(1); break;
+                        case '3': useHotkeyItem(2); break;
+                        case '4': useHotkeySkill(0); break;
+                        case '5': useHotkeySkill(1); break;
+                        case '6': useHotkeySkill(2); break;
+                        case '7': useHotkeySkill(3); break;
+                    }
+                });
+
+                window.addEventListener('keyup', (event) => {
+                    if (shopModal.style.display === 'flex' || playerInfoModal.style.display === 'flex' || levelSelectModal.style.display === 'flex' || questModal.style.display === 'flex' || gachaModal.style.display === 'flex' || endlessShopModal.style.display === 'flex') {
+                        return; 
+                    }
+                    switch (event.key.toLowerCase()) {
+                        case 'd': case 'arrowright': keys.d.pressed = false; break;
+                        case 'a': case 'arrowleft': keys.a.pressed = false; break;
+                    }
+                });
+
+                window.addEventListener('contextmenu', (event) => {
+                    if (shopModal.style.display === 'flex' || playerInfoModal.style.display === 'flex' || levelSelectModal.style.display === 'flex' || questModal.style.display === 'flex' || gachaModal.style.display === 'flex' || endlessShopModal.style.display === 'flex') {
+                        return; 
+                    }
+                    event.preventDefault();
+                    player.attack();
+                });
+
+                // Mobile controls event listeners
+                mobileLeftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys.a.pressed = true; });
+                mobileLeftBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys.a.pressed = false; });
+                mobileRightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys.d.pressed = true; });
+                mobileRightBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys.d.pressed = false; });
+                mobileJumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (player.velocity.y === 0) player.velocity.y = player.jumpPower; });
+                
+                mobileAttackBtn.addEventListener('touchstart', (e) => { e.preventDefault(); player.attack(); });
+
+                mobileItem1Btn.addEventListener('touchstart', (e) => { e.preventDefault(); useHotkeyItem(0); });
+                mobileItem2Btn.addEventListener('touchstart', (e) => { e.preventDefault(); useHotkeyItem(1); });
+                mobileItem3Btn.addEventListener('touchstart', (e) => { e.preventDefault(); useHotkeyItem(2); });
+
+                mobileSkill1Btn.addEventListener('touchstart', (e) => { e.preventDefault(); useHotkeySkill(0); });
+                mobileSkill2Btn.addEventListener('touchstart', (e) => { e.preventDefault(); useHotkeySkill(1); });
+                mobileSkill3Btn.addEventListener('touchstart', (e) => { e.preventDefault(); useHotkeySkill(2); });
+                mobileSkill4Btn.addEventListener('touchstart', (e) => { e.preventDefault(); useHotkeySkill(3); });
+
+                // Add button click sounds to mobile buttons
+                document.querySelectorAll('#mobile-controls .mobile-button').forEach(button => {
+                    button.addEventListener('touchstart', playButtonClickSound);
+                });
+            }
+        });
+
+    </script>
+</body>
+</html>
